@@ -1,15 +1,12 @@
 import { useState } from 'react'
 import { gridDimensions } from '@shared/layout'
-import { PROVIDERS, PROVIDER_IDS } from '@shared/providers'
 import type { Workspace } from '@shared/types'
 import { useWorkspaces } from '../stores/workspaces'
 import { AgentTerminal } from './AgentTerminal'
 
 export function AgentGrid({ workspace, hidden }: { workspace: Workspace; hidden: boolean }) {
-  const addAgent = useWorkspaces((s) => s.addAgent)
   const removeAgent = useWorkspaces((s) => s.removeAgent)
   const moveAgent = useWorkspaces((s) => s.moveAgent)
-  const availability = useWorkspaces((s) => s.availability)
   const [maximizedId, setMaximizedId] = useState<string | null>(null)
   // Derived, so removing the maximized agent drops back to the grid on its own.
   const maximized = workspace.agents.some((a) => a.id === maximizedId) ? maximizedId : null
@@ -22,28 +19,8 @@ export function AgentGrid({ workspace, hidden }: { workspace: Workspace; hidden:
   }
 
   return (
-    // Hidden, not unmounted: background workspaces keep their terminals attached.
-    <div className={`${hidden ? 'hidden' : 'flex'} h-full flex-col`}>
-      <header className="drag flex h-10 shrink-0 items-center gap-3 border-b border-line px-4">
-        <span className="text-sm font-semibold">{workspace.name}</span>
-        <span className="truncate text-xs text-muted" title={workspace.path}>
-          {workspace.path}
-        </span>
-        <div className="no-drag ml-auto flex items-center gap-2">
-          {PROVIDER_IDS.map((p) => (
-            <button
-              key={p}
-              className="flex items-center gap-1.5 rounded-md border border-line bg-panel px-2.5 py-1 text-xs hover:bg-raised"
-              title={availability?.[p] ? `Add a ${PROVIDERS[p].label} agent` : `${PROVIDERS[p].command} not found on PATH`}
-              onClick={() => addAgent(workspace.id, p)}
-            >
-              <span className="h-2 w-2 rounded-full" style={{ background: PROVIDERS[p].color }} />+{' '}
-              {PROVIDERS[p].label}
-            </button>
-          ))}
-        </div>
-      </header>
-
+    // Hidden, not unmounted: agents keep running while the code view is open.
+    <div className={`${hidden ? 'hidden' : 'flex'} min-h-0 flex-1 flex-col`}>
       {workspace.agents.length === 0 ? (
         <div className="flex flex-1 items-center justify-center text-sm text-muted">
           No agents running. Add one from the toolbar.

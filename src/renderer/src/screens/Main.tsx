@@ -1,11 +1,29 @@
+import { useEffect } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
-import { AgentGrid } from '../components/AgentGrid'
 import { WorkspaceSidebar } from '../components/WorkspaceSidebar'
+import { WorkspaceView } from '../components/WorkspaceView'
 import { useWorkspaces } from '../stores/workspaces'
 
 export function Main() {
   const workspaces = useWorkspaces((s) => s.workspaces)
   const activeId = useWorkspaces((s) => s.activeWorkspaceId)
+
+  // ⌘E (Ctrl+Shift+E elsewhere, since Ctrl+E is end-of-line in terminals) flips the active
+  // workspace between agents and code. Capture phase, so it works while a terminal has focus.
+  useEffect(() => {
+    const mac = navigator.platform.startsWith('Mac')
+    const onKeyDown = (e: KeyboardEvent) => {
+      const combo = mac ? e.metaKey && !e.ctrlKey && !e.shiftKey : e.ctrlKey && e.shiftKey && !e.metaKey
+      if (!combo || e.altKey || e.key.toLowerCase() !== 'e') return
+      const { activeWorkspaceId: id, views, setView } = useWorkspaces.getState()
+      if (!id) return
+      e.preventDefault()
+      e.stopPropagation()
+      setView(id, views[id] === 'code' ? 'agents' : 'code')
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [])
 
   return (
     <Group orientation="horizontal" className="h-full">
@@ -15,7 +33,7 @@ export function Main() {
       <Separator className="w-px bg-line transition-colors hover:bg-accent data-[separator=active]:bg-accent" />
       <Panel id="agents" minSize={400}>
         {workspaces.map((w) => (
-          <AgentGrid key={w.id} workspace={w} hidden={w.id !== activeId} />
+          <WorkspaceView key={w.id} workspace={w} hidden={w.id !== activeId} />
         ))}
       </Panel>
     </Group>

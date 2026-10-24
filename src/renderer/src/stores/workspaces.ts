@@ -10,8 +10,12 @@ export interface NewWorkspace {
   repo?: string
 }
 
+/** What a workspace's main area shows: the agent grid, or the files to edit by hand. */
+export type View = 'agents' | 'code'
+
 interface WorkspacesStore extends AppState {
   loaded: boolean
+  views: Record<string, View>
   setupOpen: boolean
   availability: ProviderAvailability | null
   init(): Promise<void>
@@ -20,6 +24,7 @@ interface WorkspacesStore extends AppState {
   createWorkspace(input: NewWorkspace): Promise<void>
   removeWorkspace(id: string): void
   setActive(id: string): void
+  setView(workspaceId: string, view: View): void
   addAgent(workspaceId: string, provider: Provider): void
   removeAgent(workspaceId: string, agentId: string): void
   moveAgent(workspaceId: string, agentId: string, toIndex: number): void
@@ -45,6 +50,7 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
     workspaces: [],
     activeWorkspaceId: null,
     loaded: false,
+    views: {},
     setupOpen: false,
     availability: null,
 
@@ -90,6 +96,8 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
     },
 
     setActive: (id) => set({ activeWorkspaceId: id }),
+
+    setView: (workspaceId, view) => set({ views: { ...get().views, [workspaceId]: view } }),
 
     addAgent(workspaceId, provider) {
       updateWorkspace(workspaceId, (w) => ({

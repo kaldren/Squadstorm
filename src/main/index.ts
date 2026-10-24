@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
 import type { SpawnRequest } from '@shared/api'
 import type { AppState } from '@shared/types'
+import { FileWatchers, listDir, readText, writeText } from './files'
 import { cloneRepo, githubStatus, listRepos } from './github'
 import { PtyManager } from './pty'
 import { loadState, saveState } from './store'
@@ -13,6 +14,10 @@ let mainWindow: BrowserWindow | null = null
 
 const ptys = new PtyManager((channel, id, payload) => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, id, payload)
+})
+
+const fileWatchers = new FileWatchers((root, paths) => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('files:changed', root, paths)
 })
 
 // Terminal text is drawn on a WebGL canvas, so e2e tests read pty output from here instead.
@@ -76,6 +81,14 @@ function registerIpc(): void {
     })
   )
 
+  ipcMain.handle('files:list', (_e, root: string, dir: string) => listDir(root, dir))
+  ipcMain.handle('files:read', (_e, root: string, path: string) => readText(root, path))
+  ipcMain.handle('files:write', (_e, root: string, path: string, content: string) =>
+    writeText(root, path, content)
+  )
+  ipcMain.on('files:watch', (_e, root: string) => fileWatchers.watch(root))
+  ipcMain.on('files:unwatch', (_e, root: string) => fileWatchers.unwatch(root))
+
   ipcMain.handle('pty:spawn', (_e, req: SpawnRequest) => ptys.spawn(req))
   ipcMain.handle('pty:kill', (_e, id: string) => ptys.kill(id))
   ipcMain.on('pty:write', (_e, id: string, data: string) => ptys.write(id, data))
@@ -92,7 +105,10 @@ app.whenReady().then(() => {
   })
 })
 
-app.on('before-quit', () => ptys.killAll())
+app.on('before-quit', () => {
+  ptys.killAll()
+  fileWatchers.closeAll()
+})
 
 app.on('window-all-closed', () => {
   // Agents belong to the window; don't leave them running headless.

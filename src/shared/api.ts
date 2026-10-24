@@ -1,3 +1,4 @@
+import type { FileEntry, ReadResult } from './files'
 import type { AppState } from './types'
 import type { Provider } from './providers'
 
@@ -52,6 +53,15 @@ export interface VibeApi {
     /** Accepts `owner/name` or a GitHub URL; resolves to the local clone. */
     clone(repo: string): Promise<CloneResult>
     onCloneProgress(listener: (line: string) => void): () => void
+  }
+  /** Paths are relative to the workspace root and `/`-separated. */
+  files: {
+    list(root: string, dir: string): Promise<FileEntry[]>
+    read(root: string, path: string): Promise<ReadResult>
+    write(root: string, path: string, content: string): Promise<void>
+    watch(root: string): void
+    unwatch(root: string): void
+    onChanged(listener: (root: string, paths: string[]) => void): () => void
   }
   pty: {
     spawn(req: SpawnRequest): Promise<SpawnResult>

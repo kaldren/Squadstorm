@@ -24,6 +24,14 @@ const api: VibeApi = {
       return () => ipcRenderer.removeListener('github:cloneProgress', handler)
     }
   },
+  files: {
+    list: (root, dir) => ipcRenderer.invoke('files:list', root, dir),
+    read: (root, path) => ipcRenderer.invoke('files:read', root, path),
+    write: (root, path, content) => ipcRenderer.invoke('files:write', root, path, content),
+    watch: (root) => ipcRenderer.send('files:watch', root),
+    unwatch: (root) => ipcRenderer.send('files:unwatch', root),
+    onChanged: (listener) => subscribe<string[]>('files:changed', listener)
+  },
   pty: {
     spawn: (req) => ipcRenderer.invoke('pty:spawn', req),
     write: (id, data) => ipcRenderer.send('pty:write', id, data),
