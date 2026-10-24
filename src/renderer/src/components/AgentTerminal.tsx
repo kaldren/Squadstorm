@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
+import { ActivityTracker, type Activity } from '@shared/activity'
 import { PROVIDERS } from '@shared/providers'
 import type { AgentConfig } from '@shared/types'
 import { attachPty } from '../ptyBus'
@@ -52,6 +53,7 @@ export function AgentTerminal({
   const termRef = useRef<Terminal | null>(null)
   const startRef = useRef<() => void>(() => {})
   const [status, setStatus] = useState<Status>('starting')
+  const [activity, setActivity] = useState<Activity>('online')
   const [focused, setFocused] = useState(false)
   const provider = PROVIDERS[agent.provider]
 
@@ -87,9 +89,14 @@ export function AgentTerminal({
 
     // Until spawn resolves, live output is already contained in the returned backlog.
     let attached = false
+    let tracker = new ActivityTracker(Date.now())
     const detach = attachPty(
       agent.id,
-      (data) => attached && term.write(data),
+      (data) => {
+        if (!attached) return
+        tracker.output(Date.now())
+        term.write(data)
+      },
       (code) => {
         setStatus('exited')
         term.write(`\r\n\x1b[90m[${provider.label} exited with code ${code}]\x1b[0m\r\n`)
@@ -112,6 +119,8 @@ export function AgentTerminal({
         return
       }
       if (result.backlog) term.write(result.backlog)
+      // Each (re)start begins a fresh online window.
+      tracker = new ActivityTracker(Date.now())
       attached = true
       setStatus('running')
     }
@@ -121,14 +130,23 @@ export function AgentTerminal({
     }
     void start()
 
-    const input = term.onData((data) => window.api.pty.write(agent.id, data))
-    const resize = term.onResize(({ cols, rows }) => window.api.pty.resize(agent.id, cols, rows))
+    const input = term.onData((data) => {
+      tracker.input(Date.now())
+      window.api.pty.write(agent.id, data)
+    })
+    const resize = term.onResize(({ cols, rows }) => {
+      tracker.input(Date.now())
+      window.api.pty.resize(agent.id, cols, rows)
+    })
+    // Activity also changes on its own as time passes, so poll rather than only reacting to output.
+    const activityTimer = setInterval(() => setActivity(tracker.status(Date.now())), 500)
     // Fires on grid reflow, sidebar drags, and when a hidden workspace becomes visible again.
     const observer = new ResizeObserver(() => fitIfVisible())
     observer.observe(host)
 
     return () => {
       observer.disconnect()
+      clearInterval(activityTimer)
       input.dispose()
       resize.dispose()
       detach()
@@ -187,7 +205,7 @@ export function AgentTerminal({
       >
         <span className="h-2 w-2 rounded-full" style={{ background: provider.color }} />
         <span className="font-medium">{agent.label}</span>
-        <StatusPill status={status} />
+        {status === 'running' ? <ActivityPill activity={activity} /> : <StatusPill status={status} />}
         <div className="ml-auto flex items-center gap-1">
           {(status === 'exited' || status === 'error') && (
             <button
@@ -261,4 +279,18 @@ function StatusPill({ status }: { status: Status }) {
     error: 'text-danger'
   }
   return <span className={`${styles[status]} text-[11px]`}>{status}</span>
+}
+
+function ActivityPill({ activity }: { activity: Activity }) {
+  const dots: Record<Activity, string> = {
+    online: 'bg-emerald-400',
+    idle: 'bg-orange-400',
+    working: 'bg-red-500 animate-pulse'
+  }
+  return (
+    <span className="flex items-center gap-1.5 text-[11px] text-muted" data-testid="agent-activity" data-activity={activity}>
+      <span className={`h-1.5 w-1.5 rounded-full ${dots[activity]}`} />
+      {activity}
+    </span>
+  )
 }

@@ -2,12 +2,12 @@ import { create } from 'zustand'
 import type { ProviderAvailability } from '@shared/api'
 import { moveItem, nextAgentLabel } from '@shared/layout'
 import { PROVIDER_IDS, type Provider } from '@shared/providers'
-import type { AgentConfig, AppState, Mode, Workspace } from '@shared/types'
+import type { AgentConfig, AppState, Workspace } from '@shared/types'
 
 export interface NewWorkspace {
-  mode: Mode
   path: string
   counts: Record<Provider, number>
+  repo?: string
 }
 
 interface WorkspacesStore extends AppState {
@@ -65,13 +65,12 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
     openSetup: () => set({ setupOpen: true }),
     closeSetup: () => set({ setupOpen: false }),
 
-    async createWorkspace({ mode, path, counts }) {
-      if (mode === 'spec') await window.api.ensureSpecsDir(path)
+    async createWorkspace({ path, counts, repo }) {
       const workspace: Workspace = {
         id: crypto.randomUUID(),
         name: basename(path),
         path,
-        mode,
+        repo,
         agents: buildAgents(counts)
       }
       set({

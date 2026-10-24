@@ -26,7 +26,6 @@ export function AgentGrid({ workspace, hidden }: { workspace: Workspace; hidden:
     <div className={`${hidden ? 'hidden' : 'flex'} h-full flex-col`}>
       <header className="drag flex h-10 shrink-0 items-center gap-3 border-b border-line px-4">
         <span className="text-sm font-semibold">{workspace.name}</span>
-        <ModeBadge mode={workspace.mode} />
         <span className="truncate text-xs text-muted" title={workspace.path}>
           {workspace.path}
         </span>
@@ -97,14 +96,3 @@ export function AgentGrid({ workspace, hidden }: { workspace: Workspace; hidden:
   )
 }
 
-export function ModeBadge({ mode }: { mode: Workspace['mode'] }) {
-  return mode === 'spec' ? (
-    <span className="rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-300">
-      Spec-driven
-    </span>
-  ) : (
-    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-      Vibe
-    </span>
-  )
-}

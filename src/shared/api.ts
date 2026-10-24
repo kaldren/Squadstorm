@@ -18,15 +18,41 @@ export interface SpawnResult {
 
 export type ProviderAvailability = Record<Provider, string | null>
 
+export interface GithubStatus {
+  /** Whether the `gh` CLI is on PATH. */
+  installed: boolean
+  /** Signed-in gh login, or null when gh is missing or logged out. */
+  user: string | null
+}
+
+export interface GithubRepo {
+  fullName: string
+  description: string | null
+  private: boolean
+  updatedAt: string
+}
+
+export interface CloneResult {
+  path: string
+  /** True when an earlier clone was reused instead of cloning again. */
+  reused: boolean
+}
+
 export interface VibeApi {
   state: {
     load(): Promise<AppState>
     save(state: AppState): Promise<void>
   }
   pickFolder(): Promise<string | null>
-  ensureSpecsDir(projectPath: string): Promise<void>
   /** Absolute path of each provider's CLI, or null when it is not on PATH. */
   providers(): Promise<ProviderAvailability>
+  github: {
+    status(): Promise<GithubStatus>
+    repos(): Promise<GithubRepo[]>
+    /** Accepts `owner/name` or a GitHub URL; resolves to the local clone. */
+    clone(repo: string): Promise<CloneResult>
+    onCloneProgress(listener: (line: string) => void): () => void
+  }
   pty: {
     spawn(req: SpawnRequest): Promise<SpawnResult>
     write(id: string, data: string): void

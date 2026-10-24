@@ -27,14 +27,13 @@ async function output(app: ElectronApplication, tile: Locator): Promise<string> 
   }, id)
 }
 
-test('vibe setup → agent grid → add/remove → restored on relaunch', async () => {
+test('setup → agent grid → add/remove → restored on relaunch', async () => {
   let app = await launch()
   await app.evaluate(({ dialog }, folder) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] })
   }, project)
 
   let page = await app.firstWindow()
-  await page.getByTestId('mode-vibe').click()
   await page.getByTestId('count-claude').getByLabel('More').click() // 2 Claude
   await page.getByTestId('count-codex').getByLabel('More').click() // 1 Codex
   await page.getByTestId('pick-folder').click()
@@ -43,7 +42,7 @@ test('vibe setup → agent grid → add/remove → restored on relaunch', async 
   const tiles = page.getByTestId('agent-tile')
   await expect(tiles).toHaveCount(3)
   await expect(tiles.nth(2)).toContainText('Codex 1')
-  for (let i = 0; i < 3; i++) await expect(tiles.nth(i)).toContainText('running')
+  for (let i = 0; i < 3; i++) await expect(tiles.nth(i)).toContainText('online')
 
   // Every agent runs in the project folder.
   await expect.poll(() => output(app, tiles.first())).toContain(`fake agent in ${project}`)
@@ -65,7 +64,7 @@ test('vibe setup → agent grid → add/remove → restored on relaunch', async 
   await page.screenshot({ path: 'test-results/maximized.png' })
   await page.getByLabel('Restore Claude 2').click()
   for (let i = 0; i < 3; i++) await expect(tiles.nth(i)).toBeVisible()
-  await expect(tiles.nth(0)).toContainText('running')
+  await expect(tiles.nth(0)).toContainText('online')
 
   await page.getByRole('button', { name: '+ Codex' }).click()
   await expect(tiles).toHaveCount(4)
@@ -83,7 +82,7 @@ test('vibe setup → agent grid → add/remove → restored on relaunch', async 
   await expect(tiles.nth(1)).toContainText('Claude 2')
   await expect(tiles.nth(2)).toContainText('Codex 1')
   expect(await tiles.nth(0).getAttribute('data-agent-id')).toBe(movedId)
-  await expect(tiles.nth(0)).toContainText('running')
+  await expect(tiles.nth(0)).toContainText('online')
 
   await app.close()
 

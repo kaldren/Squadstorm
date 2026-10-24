@@ -13,8 +13,17 @@ const api: VibeApi = {
     save: (state) => ipcRenderer.invoke('state:save', state)
   },
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
-  ensureSpecsDir: (projectPath) => ipcRenderer.invoke('fs:ensureSpecsDir', projectPath),
   providers: () => ipcRenderer.invoke('providers:list'),
+  github: {
+    status: () => ipcRenderer.invoke('github:status'),
+    repos: () => ipcRenderer.invoke('github:repos'),
+    clone: (repo) => ipcRenderer.invoke('github:clone', repo),
+    onCloneProgress: (listener) => {
+      const handler = (_e: IpcRendererEvent, line: string) => listener(line)
+      ipcRenderer.on('github:cloneProgress', handler)
+      return () => ipcRenderer.removeListener('github:cloneProgress', handler)
+    }
+  },
   pty: {
     spawn: (req) => ipcRenderer.invoke('pty:spawn', req),
     write: (id, data) => ipcRenderer.send('pty:write', id, data),

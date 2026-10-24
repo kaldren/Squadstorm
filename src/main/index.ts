@@ -1,8 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { mkdir, stat } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
+import { join } from 'node:path'
 import type { SpawnRequest } from '@shared/api'
 import type { AppState } from '@shared/types'
+import { cloneRepo, githubStatus, listRepos } from './github'
 import { PtyManager } from './pty'
 import { loadState, saveState } from './store'
 
@@ -66,14 +66,15 @@ function registerIpc(): void {
     return result.canceled ? null : (result.filePaths[0] ?? null)
   })
 
-  ipcMain.handle('fs:ensureSpecsDir', async (_e, projectPath: string) => {
-    if (!isAbsolute(projectPath) || !(await stat(projectPath)).isDirectory()) {
-      throw new Error(`Not a project folder: ${projectPath}`)
-    }
-    await mkdir(join(projectPath, 'specs'), { recursive: true })
-  })
-
   ipcMain.handle('providers:list', () => ptys.availability())
+
+  ipcMain.handle('github:status', () => githubStatus())
+  ipcMain.handle('github:repos', () => listRepos())
+  ipcMain.handle('github:clone', (e, repo: string) =>
+    cloneRepo(repo, (line) => {
+      if (!e.sender.isDestroyed()) e.sender.send('github:cloneProgress', line)
+    })
+  )
 
   ipcMain.handle('pty:spawn', (_e, req: SpawnRequest) => ptys.spawn(req))
   ipcMain.handle('pty:kill', (_e, id: string) => ptys.kill(id))

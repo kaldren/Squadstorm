@@ -1,7 +1,5 @@
 import type { Provider } from './providers'
 
-export type Mode = 'vibe' | 'spec'
-
 export interface AgentConfig {
   id: string
   provider: Provider
@@ -12,7 +10,8 @@ export interface Workspace {
   id: string
   name: string
   path: string
-  mode: Mode
+  /** `owner/name` when the workspace is a clone of a GitHub repo. */
+  repo?: string
   agents: AgentConfig[]
 }
 

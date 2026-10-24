@@ -1,5 +1,4 @@
 import { useWorkspaces } from '../stores/workspaces'
-import { ModeBadge } from './AgentGrid'
 
 export function WorkspaceSidebar() {
   const { workspaces, activeWorkspaceId, setActive, removeWorkspace, openSetup } = useWorkspaces()
@@ -50,10 +49,14 @@ export function WorkspaceSidebar() {
               </button>
             </div>
             <div className="flex items-center gap-2 text-[11px] text-muted">
-              <ModeBadge mode={w.mode} />
-              <span>
+              <span className="shrink-0">
                 {w.agents.length} agent{w.agents.length === 1 ? '' : 's'}
               </span>
+              {w.repo && (
+                <span className="truncate" title={`Cloned from github.com/${w.repo}`}>
+                  · {w.repo}
+                </span>
+              )}
             </div>
           </div>
         ))}
