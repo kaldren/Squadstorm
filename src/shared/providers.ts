@@ -1,0 +1,17 @@
+export type Provider = 'claude' | 'codex'
+
+export interface ProviderInfo {
+  label: string
+  command: string
+  args: string[]
+  /** Accent color for the tile header dot. */
+  color: string
+}
+
+// Adding a provider (gemini, aider…) is a matter of adding an entry here.
+export const PROVIDERS: Record<Provider, ProviderInfo> = {
+  claude: { label: 'Claude', command: 'claude', args: [], color: '#d97757' },
+  codex: { label: 'Codex', command: 'codex', args: [], color: '#10a37f' }
+}
+
+export const PROVIDER_IDS = Object.keys(PROVIDERS) as Provider[]
