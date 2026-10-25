@@ -109,6 +109,10 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(() => {
+  // Packaged builds get the icon from the bundle; in dev, swap out Electron's default.
+  if (!app.isPackaged && process.platform === 'darwin') {
+    app.dock?.setIcon(join(__dirname, '../../build/icon.png'))
+  }
   registerIpc()
   createWindow()
   app.on('activate', () => {
