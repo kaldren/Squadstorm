@@ -33,7 +33,7 @@ export function WorkspaceView({ workspace, hidden }: { workspace: Workspace; hid
               <button
                 key={p}
                 className="flex items-center gap-1.5 rounded-md border border-line bg-panel px-2.5 py-1 text-xs hover:bg-raised"
-                title={availability?.[p] ? `Add a ${PROVIDERS[p].label} agent` : `${PROVIDERS[p].command} not found on PATH`}
+                title={availability?.[p] ? (PROVIDERS[p].shell ? 'Add a terminal' : `Add a ${PROVIDERS[p].label} agent`) : `${PROVIDERS[p].command} not found on PATH`}
                 onClick={() => addAgent(workspace.id, p)}
               >
                 <span className="h-2 w-2 rounded-full" style={{ background: PROVIDERS[p].color }} />+{' '}

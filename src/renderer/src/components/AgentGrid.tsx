@@ -23,7 +23,7 @@ export function AgentGrid({ workspace, hidden }: { workspace: Workspace; hidden:
     <div className={`${hidden ? 'hidden' : 'flex'} min-h-0 flex-1 flex-col`}>
       {workspace.agents.length === 0 ? (
         <div className="flex flex-1 items-center justify-center text-sm text-muted">
-          No agents running. Add one from the toolbar.
+          Nothing running. Add an agent or a terminal from the toolbar.
         </div>
       ) : (
         <div

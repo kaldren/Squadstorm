@@ -84,16 +84,23 @@ test('setup → agent grid → add/remove → restored on relaunch', async () =>
   expect(await tiles.nth(0).getAttribute('data-agent-id')).toBe(movedId)
   await expect(tiles.nth(0)).toContainText('online')
 
+  // Plain terminals sit in the same grid as agents.
+  await page.getByRole('button', { name: '+ Terminal' }).click()
+  await expect(tiles).toHaveCount(4)
+  await expect(tiles.nth(3)).toContainText('Terminal 1')
+  await expect(tiles.nth(3)).toContainText('online')
+
   await app.close()
 
   // Relaunch: workspace and agent configs come back with fresh sessions.
   app = await launch()
   page = await app.firstWindow()
   const restored = page.getByTestId('agent-tile')
-  await expect(restored).toHaveCount(3)
+  await expect(restored).toHaveCount(4)
   // Order survives the relaunch.
   await expect(restored.nth(0)).toContainText('Codex 2')
   await expect(restored.nth(1)).toContainText('Claude 2')
   await expect(restored.nth(2)).toContainText('Codex 1')
+  await expect(restored.nth(3)).toContainText('Terminal 1')
   await app.close()
 })

@@ -14,7 +14,7 @@ const ipcMessage = (err: unknown) =>
 
 export function Setup() {
   const { availability, workspaces, createWorkspace, closeSetup } = useWorkspaces()
-  const [counts, setCounts] = useState<Record<Provider, number>>({ claude: 1, codex: 0 })
+  const [counts, setCounts] = useState<Record<Provider, number>>({ claude: 1, codex: 0, terminal: 0 })
   const [source, setSource] = useState<Source>('folder')
   const [path, setPath] = useState<string | null>(null)
   const [repoInput, setRepoInput] = useState('')
@@ -61,7 +61,7 @@ export function Setup() {
           <div>
             <h1 className="text-xl font-semibold">Assemble your agents</h1>
             <p className="mt-1 text-sm text-muted">
-              Each agent gets its own terminal. You can add or remove agents later.
+              Each agent gets its own terminal. Add plain terminals too. You can change these later.
             </p>
           </div>
           {canCancel && (

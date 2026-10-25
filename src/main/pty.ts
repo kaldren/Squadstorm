@@ -1,5 +1,5 @@
 import * as pty from 'node-pty'
-import { PROVIDERS, PROVIDER_IDS } from '@shared/providers'
+import { PROVIDERS, PROVIDER_IDS, type Provider } from '@shared/providers'
 import type { ProviderAvailability, SpawnRequest, SpawnResult } from '@shared/api'
 import { resolveCommand, shellPath } from './shell-env'
 
@@ -21,8 +21,14 @@ export class PtyManager {
 
   async availability(): Promise<ProviderAvailability> {
     const path = await shellPath()
-    const entries = PROVIDER_IDS.map((p) => [p, resolveCommand(PROVIDERS[p].command, path)])
+    const entries = PROVIDER_IDS.map((p) => [p, this.resolve(p, path)])
     return Object.fromEntries(entries) as ProviderAvailability
+  }
+
+  private resolve(provider: Provider, path: string): string | null {
+    const info = PROVIDERS[provider]
+    if (info.shell && process.env.SHELL) return process.env.SHELL
+    return resolveCommand(info.command, path)
   }
 
   /** Idempotent: re-attaching to a live session returns its backlog instead of starting a new process. */
@@ -49,7 +55,7 @@ export class PtyManager {
     const provider = PROVIDERS[req.provider]
     // VIBE_AGENT_CMD swaps every agent for an arbitrary shell command (used by e2e tests).
     const override = process.env.VIBE_AGENT_CMD
-    const file = override ? '/bin/sh' : resolveCommand(provider.command, path)
+    const file = override ? '/bin/sh' : this.resolve(req.provider, path)
     const args = override ? ['-c', override] : provider.args
     if (!file) {
       return { backlog: '', error: `"${provider.command}" was not found on your PATH.` }
