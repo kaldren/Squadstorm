@@ -1,17 +1,10 @@
-import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
+import { _electron as electron, expect, test } from '@playwright/test'
 import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const webviews = (app: ElectronApplication) =>
-  app.evaluate(({ webContents }) =>
-    webContents
-      .getAllWebContents()
-      .filter((wc) => wc.getType() === 'webview')
-      .map((wc) => ({ url: wc.getURL(), ua: wc.getUserAgent() }))
-  )
-
-test('deep work: opens the player, keeps it alive behind workspaces, blocks other webviews', async () => {
+// Streams live SomaFM radio, so this needs network access.
+test('deep work: plays a SomaFM station, switches stations, stops', async () => {
   const userData = mkdtempSync(join(tmpdir(), 'vibe-e2e-data-'))
   const project = realpathSync(mkdtempSync(join(tmpdir(), 'vibe-e2e-project-')))
   const app = await electron.launch({
@@ -24,33 +17,26 @@ test('deep work: opens the player, keeps it alive behind workspaces, blocks othe
   const page = await app.firstWindow()
   await page.getByTestId('pick-folder').click()
   await page.getByTestId('start').click()
-  await expect(page.getByTestId('agent-tile')).toHaveCount(1)
 
-  // The player only mounts once Deep Work is first opened.
-  expect(await webviews(app)).toHaveLength(0)
-  await page.getByTestId('deep-work-entry').click()
-  const screen = page.getByTestId('deep-work')
-  await expect(screen).toBeVisible()
-  await expect.poll(async () => (await webviews(app))[0]?.url).toMatch(/^https:\/\/(music|consent)\.youtube\.com\//)
-  const [player] = await webviews(app)
-  expect(player.ua).not.toContain('Electron')
-  await page.waitForTimeout(2500)
+  const panel = page.getByTestId('deep-work')
+  const toggle = page.getByTestId('deep-work-toggle')
+  await expect(toggle).toHaveAttribute('aria-label', 'Play')
+
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-label', 'Stop')
+  // Once the stream is up, the subtitle shows the track from SomaFM's now-playing API.
+  await expect(panel).toContainText('–', { timeout: 15_000 })
+  await expect(panel).not.toContainText("Couldn't reach SomaFM")
   await page.screenshot({ path: 'test-results/deepwork.png' })
 
-  // Back to the workspace: the screen hides but the player keeps running.
-  await page.getByText('agent', { exact: false }).first().click()
-  await expect(screen).toBeHidden()
-  await expect(page.getByTestId('agent-tile')).toBeVisible()
-  expect(await webviews(app)).toHaveLength(1)
+  // Switching station keeps playing, on the new station.
+  await panel.getByLabel('Station').selectOption('dronezone')
+  await expect(toggle).toHaveAttribute('aria-label', 'Stop')
+  await expect(panel).toContainText('–', { timeout: 15_000 })
 
-  // Anything other than the player is refused.
-  await page.evaluate(() => {
-    const rogue = document.createElement('webview')
-    rogue.setAttribute('src', 'https://example.com/')
-    document.body.appendChild(rogue)
-  })
-  await page.waitForTimeout(500)
-  expect(await webviews(app)).toHaveLength(1)
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-label', 'Play')
+  await expect(panel).toContainText('Atmospheric textures')
 
   await app.close()
 })

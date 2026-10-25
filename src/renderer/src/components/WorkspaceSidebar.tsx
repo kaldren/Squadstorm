@@ -1,9 +1,8 @@
-import { useDeepWork } from '../stores/deepWork'
+import { DeepWork } from './DeepWork'
 import { useWorkspaces } from '../stores/workspaces'
 
 export function WorkspaceSidebar() {
-  const { workspaces, activeWorkspaceId, deepWorkOpen, setActive, removeWorkspace, openSetup, openDeepWork } =
-    useWorkspaces()
+  const { workspaces, activeWorkspaceId, setActive, removeWorkspace, openSetup } = useWorkspaces()
 
   return (
     <aside className="flex h-full flex-col border-r border-line bg-panel">
@@ -29,7 +28,7 @@ export function WorkspaceSidebar() {
             role="button"
             tabIndex={0}
             className={`group mb-0.5 flex cursor-pointer flex-col gap-1 rounded-md px-2.5 py-2 ${
-              w.id === activeWorkspaceId && !deepWorkOpen ? 'bg-raised' : 'hover:bg-raised/60'
+              w.id === activeWorkspaceId ? 'bg-raised' : 'hover:bg-raised/60'
             }`}
             onClick={() => setActive(w.id)}
             onKeyDown={(e) => e.key === 'Enter' && setActive(w.id)}
@@ -63,46 +62,7 @@ export function WorkspaceSidebar() {
           </div>
         ))}
       </nav>
-      <DeepWorkEntry active={deepWorkOpen} onOpen={openDeepWork} />
+      <DeepWork />
     </aside>
-  )
-}
-
-function DeepWorkEntry({ active, onOpen }: { active: boolean; onOpen: () => void }) {
-  const { playing, track, togglePlayback } = useDeepWork()
-
-  return (
-    <div className="border-t border-line p-2">
-      <div
-        role="button"
-        tabIndex={0}
-        data-testid="deep-work-entry"
-        className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 ${
-          active ? 'bg-raised' : 'hover:bg-raised/60'
-        }`}
-        title="YouTube Music, playing while you work"
-        onClick={onOpen}
-        onKeyDown={(e) => e.key === 'Enter' && onOpen()}
-      >
-        <span className="text-sm text-muted">♪</span>
-        <div className="flex min-w-0 flex-col">
-          <span className="text-sm font-medium">Deep Work</span>
-          {track && <span className="truncate text-[11px] text-muted">{track}</span>}
-        </div>
-        {track && (
-          <button
-            className="ml-auto shrink-0 rounded px-1.5 text-xs text-muted hover:bg-panel hover:text-fg"
-            title={playing ? 'Pause' : 'Play'}
-            aria-label={playing ? 'Pause' : 'Play'}
-            onClick={(e) => {
-              e.stopPropagation()
-              togglePlayback()
-            }}
-          >
-            {playing ? '❚❚' : '▶'}
-          </button>
-        )}
-      </div>
-    </div>
   )
 }

@@ -17,13 +17,10 @@ interface WorkspacesStore extends AppState {
   loaded: boolean
   views: Record<string, View>
   setupOpen: boolean
-  /** The Deep Work music screen is covering the workspaces. */
-  deepWorkOpen: boolean
   availability: ProviderAvailability | null
   init(): Promise<void>
   openSetup(): void
   closeSetup(): void
-  openDeepWork(): void
   createWorkspace(input: NewWorkspace): Promise<void>
   removeWorkspace(id: string): void
   setActive(id: string): void
@@ -55,7 +52,6 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
     loaded: false,
     views: {},
     setupOpen: false,
-    deepWorkOpen: false,
     availability: null,
 
     async init() {
@@ -74,7 +70,6 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
 
     openSetup: () => set({ setupOpen: true }),
     closeSetup: () => set({ setupOpen: false }),
-    openDeepWork: () => set({ deepWorkOpen: true }),
 
     async createWorkspace({ path, counts, repo }) {
       const workspace: Workspace = {
@@ -87,8 +82,7 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
       set({
         workspaces: [...get().workspaces, workspace],
         activeWorkspaceId: workspace.id,
-        setupOpen: false,
-        deepWorkOpen: false
+        setupOpen: false
       })
     },
 
@@ -101,7 +95,7 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
       set({ workspaces, activeWorkspaceId })
     },
 
-    setActive: (id) => set({ activeWorkspaceId: id, deepWorkOpen: false }),
+    setActive: (id) => set({ activeWorkspaceId: id }),
 
     setView: (workspaceId, view) => set({ views: { ...get().views, [workspaceId]: view } }),
 

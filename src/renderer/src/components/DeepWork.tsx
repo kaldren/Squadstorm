@@ -1,48 +1,59 @@
-import { useEffect, useRef } from 'react'
-import { DEEP_WORK_PARTITION, DEEP_WORK_URL } from '@shared/deepWork'
-import { registerPlayer, useDeepWork } from '../stores/deepWork'
+import { STATIONS, useDeepWork } from '../stores/deepWork'
 
-export function DeepWork({ hidden }: { hidden: boolean }) {
-  const ref = useRef<Electron.WebviewTag>(null)
-  const track = useDeepWork((s) => s.track)
-
-  useEffect(() => {
-    const webview = ref.current!
-    const { setPlaying, setTitle } = useDeepWork.getState()
-    const onPlay = () => setPlaying(true)
-    const onPause = () => setPlaying(false)
-    const onTitle = (e: Electron.PageTitleUpdatedEvent) => setTitle(e.title)
-    webview.addEventListener('media-started-playing', onPlay)
-    webview.addEventListener('media-paused', onPause)
-    webview.addEventListener('page-title-updated', onTitle)
-    registerPlayer(webview)
-    return () => {
-      webview.removeEventListener('media-started-playing', onPlay)
-      webview.removeEventListener('media-paused', onPause)
-      webview.removeEventListener('page-title-updated', onTitle)
-      registerPlayer(null)
-      setPlaying(false)
-    }
-  }, [])
+/** Deep Work mode: coding radio from SomaFM, at the foot of the sidebar. */
+export function DeepWork() {
+  const { station, playing, loading, track, error, toggle, setStation } = useDeepWork()
+  const on = playing || loading
+  const current = STATIONS.find((s) => s.id === station)!
 
   return (
-    // Covers the workspaces rather than replacing them, and stays mounted while hidden so
-    // the music keeps playing (a display:none webview misbehaves, so it's made invisible).
-    <div
-      data-testid="deep-work"
-      className={`absolute inset-0 z-10 flex flex-col bg-bg ${hidden ? 'invisible' : ''}`}
-    >
-      <header className="drag flex h-10 shrink-0 items-center gap-3 border-b border-line px-4">
-        <span className="text-sm font-semibold">Deep Work</span>
-        <span className="truncate text-xs text-muted">{track ?? 'YouTube Music'}</span>
-      </header>
-      <webview
-        ref={ref}
-        src={DEEP_WORK_URL}
-        partition={DEEP_WORK_PARTITION}
-        // Google's consent and sign-in pages assume a white page behind them.
-        className="min-h-0 flex-1 bg-white"
-      />
+    <div className="border-t border-line p-2" data-testid="deep-work">
+      <div className={`rounded-md px-2.5 py-2 ${on ? 'bg-raised' : ''}`}>
+        <div className="flex items-center gap-2">
+          <button
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] ${
+              on ? 'bg-accent text-bg' : 'border border-line text-muted hover:text-fg'
+            }`}
+            title={on ? 'Leave Deep Work' : 'Enter Deep Work'}
+            aria-label={on ? 'Stop' : 'Play'}
+            data-testid="deep-work-toggle"
+            onClick={toggle}
+          >
+            {on ? '❚❚' : '▶'}
+          </button>
+          <div className="flex min-w-0 flex-col">
+            <span className="text-sm font-medium">Deep Work</span>
+            <span className="truncate text-[11px] text-muted" title={track ?? current.blurb}>
+              {loading ? 'Tuning in…' : (track ?? current.blurb)}
+            </span>
+          </div>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            className="min-w-0 flex-1 rounded border border-line bg-panel px-1.5 py-1 text-xs text-fg"
+            value={station}
+            aria-label="Station"
+            onChange={(e) => setStation(e.target.value)}
+          >
+            {STATIONS.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title}
+              </option>
+            ))}
+          </select>
+          {/* SomaFM is listener-supported; credit it and point to where to donate. */}
+          <a
+            href="https://somafm.com/support/"
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 text-[11px] text-muted hover:text-fg"
+            title="Free, ad-free radio from SomaFM. Consider supporting them."
+          >
+            SomaFM ↗
+          </a>
+        </div>
+        {error && <p className="mt-1.5 text-[11px] text-danger">{error}</p>}
+      </div>
     </div>
   )
 }
