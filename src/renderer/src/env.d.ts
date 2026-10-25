@@ -1,7 +1,7 @@
-import type { VibeApi } from '@shared/api'
+import type { LeyaApi } from '@shared/api'
 
 declare global {
   interface Window {
-    api: VibeApi
+    api: LeyaApi
   }
 }

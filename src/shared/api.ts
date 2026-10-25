@@ -40,7 +40,7 @@ export interface CloneResult {
   reused: boolean
 }
 
-export interface VibeApi {
+export interface LeyaApi {
   state: {
     load(): Promise<AppState>
     save(state: AppState): Promise<void>

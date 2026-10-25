@@ -6,12 +6,12 @@ set -euo pipefail
 
 REF="${1:-main}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-BUILD_DIR="$HOME/Library/Caches/vibe-ide/build"
-LOCK_DIR="$HOME/Library/Caches/vibe-ide/update.lock"
-DEST="${APP_DEST:-/Applications/Vibe IDE.app}"
+BUILD_DIR="$HOME/Library/Caches/leya/build"
+LOCK_DIR="$HOME/Library/Caches/leya/update.lock"
+DEST="${APP_DEST:-/Applications/Leya.app}"
 
 notify() {
-  osascript -e "display notification \"$1\" with title \"Vibe IDE\"" >/dev/null 2>&1 || true
+  osascript -e "display notification \"$1\" with title \"Leya\"" >/dev/null 2>&1 || true
 }
 
 mkdir -p "$(dirname "$BUILD_DIR")"
@@ -20,7 +20,7 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
   exit 0
 fi
 trap 'rmdir "$LOCK_DIR"' EXIT
-trap 'notify "Update failed — see ~/Library/Logs/vibe-ide-update.log"' ERR
+trap 'notify "Update failed — see ~/Library/Logs/leya-update.log"' ERR
 
 SHA="$(git -C "$REPO" rev-parse "$REF")"
 echo "[$(date)] Building $REF ($SHA)"
@@ -38,11 +38,11 @@ pnpm install --frozen-lockfile
 pnpm exec electron-vite build
 pnpm exec electron-builder --mac --dir
 
-BUILT="$(find "$BUILD_DIR/dist" -maxdepth 2 -name 'Vibe IDE.app' -type d | head -n 1)"
+BUILT="$(find "$BUILD_DIR/dist" -maxdepth 2 -name 'Leya.app' -type d | head -n 1)"
 [ -n "$BUILT" ]
 
 if pgrep -f "$DEST/Contents/MacOS/" >/dev/null; then
-  notify "Update ready — it will install when you quit Vibe IDE."
+  notify "Update ready — it will install when you quit Leya."
   echo "App is running; waiting for it to quit."
   while pgrep -f "$DEST/Contents/MacOS/" >/dev/null; do sleep 5; done
 fi

@@ -6,10 +6,12 @@ import { FileWatchers, listDir, readText, writeText } from './files'
 import { gitCommit, gitCommitDiff, gitCommitFiles, gitDiff, gitLog, gitPush, gitStatus } from './git'
 import { cloneRepo, githubStatus, listRepos } from './github'
 import { PtyManager } from './pty'
+import { migrateFromVibeIde } from './migrate'
 import { loadState, saveState } from './store'
 
 // Lets tests run against a throwaway profile.
-if (process.env.VIBE_USER_DATA) app.setPath('userData', process.env.VIBE_USER_DATA)
+if (process.env.LEYA_USER_DATA) app.setPath('userData', process.env.LEYA_USER_DATA)
+else migrateFromVibeIde()
 
 let mainWindow: BrowserWindow | null = null
 
@@ -22,7 +24,7 @@ const fileWatchers = new FileWatchers((root, paths) => {
 })
 
 // Terminal text is drawn on a WebGL canvas, so e2e tests read pty output from here instead.
-if (process.env.VIBE_E2E) Object.assign(globalThis, { __vibePtys: ptys })
+if (process.env.LEYA_E2E) Object.assign(globalThis, { __leyaPtys: ptys })
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({

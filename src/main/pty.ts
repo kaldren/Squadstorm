@@ -53,8 +53,8 @@ export class PtyManager {
 
     const path = await shellPath()
     const provider = PROVIDERS[req.provider]
-    // VIBE_AGENT_CMD swaps every agent for an arbitrary shell command (used by e2e tests).
-    const override = process.env.VIBE_AGENT_CMD
+    // LEYA_AGENT_CMD swaps every agent for an arbitrary shell command (used by e2e tests).
+    const override = process.env.LEYA_AGENT_CMD
     const file = override ? '/bin/sh' : this.resolve(req.provider, path)
     const args = override ? ['-c', override] : provider.args
     if (!file) {

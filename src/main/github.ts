@@ -6,10 +6,10 @@ import type { CloneResult, GithubRepo, GithubStatus } from '@shared/api'
 import { parseRepo, repoFullName } from '@shared/github'
 import { resolveCommand, shellPath } from './shell-env'
 
-// VIBE_GIT_BASE swaps github.com for another git host and bypasses gh (e2e tests point it at a
-// local folder of repos); VIBE_REPOS_DIR moves where clones land.
-const gitBase = () => process.env.VIBE_GIT_BASE
-const reposDir = () => process.env.VIBE_REPOS_DIR ?? join(homedir(), 'VibeIDE', 'repos')
+// LEYA_GIT_BASE swaps github.com for another git host and bypasses gh (e2e tests point it at a
+// local folder of repos); LEYA_REPOS_DIR moves where clones land.
+const gitBase = () => process.env.LEYA_GIT_BASE
+const reposDir = () => process.env.LEYA_REPOS_DIR ?? join(homedir(), 'Leya', 'repos')
 
 export async function gitEnv(): Promise<NodeJS.ProcessEnv> {
   // Never let git block on an interactive credential prompt nobody can see.

@@ -1,5 +1,5 @@
 {
-  "name": "vibe-ide",
+  "name": "leya",
   "version": "0.1.0",
   "description": "Lightweight AI-first IDE for running many coding agents side by side",
   "main": "./out/main/index.js",
@@ -49,8 +49,8 @@
     "vitest": "^5.0.5"
   },
   "build": {
-    "appId": "dev.vibe-ide.app",
-    "productName": "Vibe IDE",
+    "appId": "dev.leya.app",
+    "productName": "Leya",
     "directories": {
       "output": "dist"
     },

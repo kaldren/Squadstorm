@@ -4,15 +4,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 test('code view: browse, edit, save, follow agent edits, switch back', async () => {
-  const userData = mkdtempSync(join(tmpdir(), 'vibe-e2e-data-'))
-  const project = realpathSync(mkdtempSync(join(tmpdir(), 'vibe-e2e-project-')))
+  const userData = mkdtempSync(join(tmpdir(), 'leya-e2e-data-'))
+  const project = realpathSync(mkdtempSync(join(tmpdir(), 'leya-e2e-project-')))
   mkdirSync(join(project, 'src'))
   writeFileSync(join(project, 'src', 'index.ts'), 'export const answer = 1\n')
   writeFileSync(join(project, 'README.md'), '# hello\n')
 
   const app = await electron.launch({
     args: ['.'],
-    env: { ...process.env, VIBE_E2E: '1', VIBE_USER_DATA: userData, VIBE_AGENT_CMD: 'exec cat' }
+    env: { ...process.env, LEYA_E2E: '1', LEYA_USER_DATA: userData, LEYA_AGENT_CMD: 'exec cat' }
   })
   await app.evaluate(({ dialog }, folder) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] })
