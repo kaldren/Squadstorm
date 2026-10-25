@@ -1,4 +1,5 @@
 import type { FileEntry, ReadResult } from './files'
+import type { Commit, DiffSides, FileChange, GitStatus } from './git'
 import type { AppState } from './types'
 import type { Provider } from './providers'
 
@@ -62,6 +63,21 @@ export interface VibeApi {
     watch(root: string): void
     unwatch(root: string): void
     onChanged(listener: (root: string, paths: string[]) => void): () => void
+  }
+  git: {
+    status(root: string): Promise<GitStatus>
+    /** Recent commits on the current branch, newest first. */
+    log(root: string): Promise<Commit[]>
+    /** Files a commit changed, compared with its first parent. */
+    commitFiles(root: string, hash: string): Promise<FileChange[]>
+    /** A file before and after a commit. */
+    commitDiff(root: string, hash: string, path: string, from?: string): Promise<DiffSides>
+    /** `from` is the old path of a renamed file. */
+    diff(root: string, path: string, from?: string): Promise<DiffSides>
+    /** Stages everything and commits it. */
+    commit(root: string, message: string): Promise<void>
+    /** Pushes the current branch, publishing it to origin if it has no upstream yet. */
+    push(root: string): Promise<void>
   }
   pty: {
     spawn(req: SpawnRequest): Promise<SpawnResult>

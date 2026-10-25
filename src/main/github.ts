@@ -11,7 +11,7 @@ import { resolveCommand, shellPath } from './shell-env'
 const gitBase = () => process.env.VIBE_GIT_BASE
 const reposDir = () => process.env.VIBE_REPOS_DIR ?? join(homedir(), 'VibeIDE', 'repos')
 
-async function gitEnv(): Promise<NodeJS.ProcessEnv> {
+export async function gitEnv(): Promise<NodeJS.ProcessEnv> {
   // Never let git block on an interactive credential prompt nobody can see.
   return { ...process.env, PATH: await shellPath(), GIT_TERMINAL_PROMPT: '0' }
 }
@@ -20,12 +20,17 @@ async function ghBinary(): Promise<string | null> {
   return gitBase() ? null : resolveCommand('gh', await shellPath())
 }
 
-function run(file: string, args: string[], env: NodeJS.ProcessEnv): Promise<string> {
+export function run(
+  file: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  cwd?: string
+): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       file,
       args,
-      { env, timeout: 30_000, maxBuffer: 16 * 1024 * 1024 },
+      { env, cwd, timeout: 60_000, maxBuffer: 16 * 1024 * 1024 },
       (err, stdout, stderr) =>
         err ? reject(new Error(stderr.trim() || err.message)) : resolve(stdout)
     )

@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
+import type { Commit, FileChange } from '@shared/git'
+import { ChangesPanel, useGitStatus } from './ChangesPanel'
 import { CodeEditor } from './CodeEditor'
+import { DiffView } from './DiffView'
 import { FileTree } from './FileTree'
+import { HistoryPanel } from './HistoryPanel'
 
 const basename = (path: string) => path.split('/').pop() ?? path
 
@@ -9,6 +13,17 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
   const [tabs, setTabs] = useState<string[]>([])
   const [active, setActive] = useState<string | null>(null)
   const [dirty, setDirty] = useState<ReadonlySet<string>>(new Set())
+  const [side, setSide] = useState<'files' | 'changes' | 'history'>('files')
+  // A selected change replaces the editor with its diff until a file or tab is picked.
+  // With a commit it is that commit's change to the file, otherwise the uncommitted one.
+  const [diff, setDiff] = useState<{ change: FileChange; commit?: Commit } | null>(null)
+  const git = useGitStatus(root, !hidden)
+
+  // Once a change is committed or reverted, its diff has nothing left to show.
+  const diffGone = diff !== null && !diff.commit && !git.status.changes.some((c) => c.path === diff.change.path)
+  useEffect(() => {
+    if (diffGone) setDiff(null)
+  }, [diffGone])
 
   // Agents edit files while the code view is open; the tree and editor follow along.
   useEffect(() => {
@@ -17,6 +32,7 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
   }, [root])
 
   const open = (path: string) => {
+    setDiff(null)
     setTabs((t) => (t.includes(path) ? t : [...t, path]))
     setActive(path)
   }
@@ -42,8 +58,51 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
   return (
     <div className={`${hidden ? 'hidden' : 'flex'} min-h-0 flex-1`}>
       <Group orientation="horizontal" className="h-full w-full">
-        <Panel id="files" defaultSize={240} minSize={160} maxSize={480}>
-          <FileTree root={root} activePath={active} onOpen={open} />
+        <Panel id="files" defaultSize={260} minSize={180} maxSize={480}>
+          <div className="flex h-full flex-col border-r border-line bg-panel">
+            <div className="flex h-8 shrink-0 items-center gap-3 px-3 text-[11px] font-semibold uppercase tracking-wider">
+              {(['files', 'changes', 'history'] as const).map((s) => (
+                <button
+                  key={s}
+                  role="tab"
+                  aria-selected={side === s}
+                  className={`uppercase ${side === s ? 'text-fg' : 'text-muted hover:text-fg'}`}
+                  onClick={() => setSide(s)}
+                >
+                  {s}
+                  {s === 'changes' && git.status.changes.length > 0 && (
+                    <span className="ml-1.5 rounded-full bg-raised px-1.5 py-px text-[10px] text-fg">
+                      {git.status.changes.length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+            {/* Both stay mounted so the tree keeps its expanded folders. */}
+            <div className={side === 'files' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+              <FileTree root={root} activePath={diff ? null : active} onOpen={open} />
+            </div>
+            <div className={side === 'changes' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+              <ChangesPanel
+                root={root}
+                status={git.status}
+                loaded={git.loaded}
+                statusError={git.error}
+                refresh={git.refresh}
+                selected={diff && !diff.commit ? diff.change.path : null}
+                onSelect={(change) => setDiff({ change })}
+              />
+            </div>
+            <div className={side === 'history' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+              <HistoryPanel
+                root={root}
+                status={git.status}
+                visible={!hidden && side === 'history'}
+                selected={diff?.commit ? { hash: diff.commit.hash, path: diff.change.path } : null}
+                onSelect={(commit, change) => setDiff({ change, commit })}
+              />
+            </div>
+          </div>
         </Panel>
         <Separator className="w-px bg-line transition-colors hover:bg-accent data-[separator=active]:bg-accent" />
         <Panel id="editor" minSize={300}>
@@ -54,13 +113,16 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
                   <div
                     key={path}
                     role="tab"
-                    aria-selected={path === active}
+                    aria-selected={path === active && !diff}
                     title={path}
                     data-testid="editor-tab"
                     className={`group flex shrink-0 cursor-pointer items-center gap-1.5 border-r border-line pr-1.5 pl-3 ${
-                      path === active ? 'bg-bg text-fg' : 'text-muted hover:text-fg'
+                      path === active && !diff ? 'bg-bg text-fg' : 'text-muted hover:text-fg'
                     }`}
-                    onClick={() => setActive(path)}
+                    onClick={() => {
+                      setDiff(null)
+                      setActive(path)
+                    }}
                     onAuxClick={(e) => e.button === 1 && close(path)}
                   >
                     {basename(path)}
@@ -79,14 +141,25 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
                           <span className="hidden group-hover:inline">✕</span>
                         </>
                       ) : (
-                        <span className={path === active ? '' : 'invisible group-hover:visible'}>✕</span>
+                        <span className={path === active && !diff ? '' : 'invisible group-hover:visible'}>✕</span>
                       )}
                     </button>
                   </div>
                 ))}
               </div>
             )}
-            <CodeEditor root={root} tabs={tabs} active={active} onDirty={markDirty} />
+            {diff && (
+              <DiffView
+                key={`${diff.commit?.hash ?? ''}:${diff.change.path}`}
+                root={root}
+                change={diff.change}
+                commit={diff.commit}
+                onOpenFile={open}
+              />
+            )}
+            <div className={diff ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
+              <CodeEditor root={root} tabs={tabs} active={active} onDirty={markDirty} />
+            </div>
           </div>
         </Panel>
       </Group>

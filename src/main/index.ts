@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import type { SpawnRequest } from '@shared/api'
 import type { AppState } from '@shared/types'
 import { FileWatchers, listDir, readText, writeText } from './files'
+import { gitCommit, gitCommitDiff, gitCommitFiles, gitDiff, gitLog, gitPush, gitStatus } from './git'
 import { cloneRepo, githubStatus, listRepos } from './github'
 import { PtyManager } from './pty'
 import { loadState, saveState } from './store'
@@ -88,6 +89,16 @@ function registerIpc(): void {
   )
   ipcMain.on('files:watch', (_e, root: string) => fileWatchers.watch(root))
   ipcMain.on('files:unwatch', (_e, root: string) => fileWatchers.unwatch(root))
+
+  ipcMain.handle('git:status', (_e, root: string) => gitStatus(root))
+  ipcMain.handle('git:log', (_e, root: string) => gitLog(root))
+  ipcMain.handle('git:commitFiles', (_e, root: string, hash: string) => gitCommitFiles(root, hash))
+  ipcMain.handle('git:commitDiff', (_e, root: string, hash: string, path: string, from?: string) =>
+    gitCommitDiff(root, hash, path, from)
+  )
+  ipcMain.handle('git:diff', (_e, root: string, path: string, from?: string) => gitDiff(root, path, from))
+  ipcMain.handle('git:commit', (_e, root: string, message: string) => gitCommit(root, message))
+  ipcMain.handle('git:push', (_e, root: string) => gitPush(root))
 
   ipcMain.handle('pty:spawn', (_e, req: SpawnRequest) => ptys.spawn(req))
   ipcMain.handle('pty:kill', (_e, id: string) => ptys.kill(id))

@@ -20,18 +20,21 @@ type Buffer = { state: EditorState; saved: string; scrollTop: number } | { error
 const language = new Compartment()
 
 // Match the app palette; one-dark supplies the syntax colors.
-const theme = Prec.highest(
-  EditorView.theme(
-    {
-      '&': { height: '100%', backgroundColor: 'var(--color-bg)', fontSize: '13px' },
-      '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.5' },
-      '.cm-gutters': { backgroundColor: 'var(--color-bg)', border: 'none' },
-      '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: '#ffffff08' },
-      '&.cm-focused': { outline: 'none' }
-    },
-    { dark: true }
+export const editorTheme = [
+  oneDark,
+  Prec.highest(
+    EditorView.theme(
+      {
+        '&': { height: '100%', backgroundColor: 'var(--color-bg)', fontSize: '13px' },
+        '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.5' },
+        '.cm-gutters': { backgroundColor: 'var(--color-bg)', border: 'none' },
+        '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: '#ffffff08' },
+        '&.cm-focused': { outline: 'none' }
+      },
+      { dark: true }
+    )
   )
-)
+]
 
 export function CodeEditor({ root, tabs, active, onDirty }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -74,8 +77,7 @@ export function CodeEditor({ root, tabs, active, onDirty }: Props) {
       extensions: [
         keymap.of([indentWithTab, { key: 'Mod-s', preventDefault: true, run: () => (void save(path), true) }]),
         basicSetup,
-        oneDark,
-        theme,
+        editorTheme,
         language.of([]),
         EditorView.updateListener.of((u) => {
           const buffer = buffers.current.get(path)

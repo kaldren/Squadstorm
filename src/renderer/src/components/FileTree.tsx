@@ -81,13 +81,8 @@ export function FileTree({ root, activePath, onOpen }: Props) {
     ))
 
   return (
-    <div className="flex h-full flex-col border-r border-line bg-panel">
-      <div className="flex h-8 shrink-0 items-center px-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
-        Files
-      </div>
-      <div role="tree" className="min-h-0 flex-1 overflow-y-auto pb-2">
-        {error ? <p className="px-3 text-xs text-danger">{error}</p> : renderDir('', 0)}
-      </div>
+    <div role="tree" className="min-h-0 flex-1 overflow-y-auto pb-2">
+      {error ? <p className="px-3 text-xs text-danger">{error}</p> : renderDir('', 0)}
     </div>
   )
 }

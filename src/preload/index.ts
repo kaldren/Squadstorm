@@ -32,6 +32,15 @@ const api: VibeApi = {
     unwatch: (root) => ipcRenderer.send('files:unwatch', root),
     onChanged: (listener) => subscribe<string[]>('files:changed', listener)
   },
+  git: {
+    status: (root) => ipcRenderer.invoke('git:status', root),
+    log: (root) => ipcRenderer.invoke('git:log', root),
+    commitFiles: (root, hash) => ipcRenderer.invoke('git:commitFiles', root, hash),
+    commitDiff: (root, hash, path, from) => ipcRenderer.invoke('git:commitDiff', root, hash, path, from),
+    diff: (root, path, from) => ipcRenderer.invoke('git:diff', root, path, from),
+    commit: (root, message) => ipcRenderer.invoke('git:commit', root, message),
+    push: (root) => ipcRenderer.invoke('git:push', root)
+  },
   pty: {
     spawn: (req) => ipcRenderer.invoke('pty:spawn', req),
     write: (id, data) => ipcRenderer.send('pty:write', id, data),
