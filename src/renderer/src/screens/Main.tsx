@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
+import { DeepWork } from '../components/DeepWork'
 import { WorkspaceSidebar } from '../components/WorkspaceSidebar'
 import { WorkspaceView } from '../components/WorkspaceView'
 import { useWorkspaces } from '../stores/workspaces'
@@ -7,6 +8,10 @@ import { useWorkspaces } from '../stores/workspaces'
 export function Main() {
   const workspaces = useWorkspaces((s) => s.workspaces)
   const activeId = useWorkspaces((s) => s.activeWorkspaceId)
+  const deepWorkOpen = useWorkspaces((s) => s.deepWorkOpen)
+  // The player mounts on first open, then stays mounted so music survives leaving the screen.
+  const [deepWorkOpened, setDeepWorkOpened] = useState(false)
+  if (deepWorkOpen && !deepWorkOpened) setDeepWorkOpened(true)
 
   // ⌘E (Ctrl+Shift+E elsewhere, since Ctrl+E is end-of-line in terminals) flips the active
   // workspace between agents and code. Capture phase, so it works while a terminal has focus.
@@ -31,10 +36,11 @@ export function Main() {
         <WorkspaceSidebar />
       </Panel>
       <Separator className="w-px bg-line transition-colors hover:bg-accent data-[separator=active]:bg-accent" />
-      <Panel id="agents" minSize={400}>
+      <Panel id="agents" minSize={400} className="relative">
         {workspaces.map((w) => (
           <WorkspaceView key={w.id} workspace={w} hidden={w.id !== activeId} />
         ))}
+        {deepWorkOpened && <DeepWork hidden={!deepWorkOpen} />}
       </Panel>
     </Group>
   )

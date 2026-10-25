@@ -1,6 +1,7 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import { join } from 'node:path'
 import type { SpawnRequest } from '@shared/api'
+import { DEEP_WORK_PARTITION, DEEP_WORK_URL } from '@shared/deepWork'
 import type { AppState } from '@shared/types'
 import { FileWatchers, listDir, readText, writeText } from './files'
 import { gitCommit, gitCommitDiff, gitCommitFiles, gitDiff, gitLog, gitPush, gitStatus } from './git'
@@ -37,7 +38,9 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      // Only for the Deep Work player; see lockDownWebviews.
+      webviewTag: true
     }
   })
 
@@ -58,6 +61,32 @@ function createWindow(): void {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+}
+
+// The renderer may only embed the Deep Work player, in its own session and without node access.
+function lockDownWebviews(): void {
+  app.on('web-contents-created', (_e, contents) => {
+    contents.on('will-attach-webview', (event, webPreferences, params) => {
+      delete webPreferences.preload
+      webPreferences.nodeIntegration = false
+      webPreferences.contextIsolation = true
+      webPreferences.sandbox = true
+      if (!params.src.startsWith(DEEP_WORK_URL) || params.partition !== DEEP_WORK_PARTITION) {
+        event.preventDefault()
+      }
+    })
+    if (contents.getType() === 'webview') {
+      contents.setWindowOpenHandler(({ url }) => {
+        if (/^https?:\/\//.test(url)) shell.openExternal(url)
+        return { action: 'deny' }
+      })
+    }
+  })
+
+  // Google refuses sign-in from user agents that name Electron, so look like plain Chrome.
+  const player = session.fromPartition(DEEP_WORK_PARTITION)
+  const ua = player.getUserAgent().replace(`${app.getName()}/${app.getVersion()} `, '')
+  player.setUserAgent(ua.replace(/ Electron\/\S+/, ''))
 }
 
 function registerIpc(): void {
@@ -113,6 +142,7 @@ app.whenReady().then(() => {
   if (!app.isPackaged && process.platform === 'darwin') {
     app.dock?.setIcon(join(__dirname, '../../build/icon.png'))
   }
+  lockDownWebviews()
   registerIpc()
   createWindow()
   app.on('activate', () => {
