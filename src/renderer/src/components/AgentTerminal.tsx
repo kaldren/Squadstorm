@@ -157,7 +157,7 @@ export function AgentTerminal({
 
   return (
     <div
-      className={`${hidden ? 'hidden' : 'flex'} min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border bg-bg ${
+      className={`${hidden ? 'hidden' : 'flex'} min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-bg ${
         reorder?.dropTarget
           ? 'border-accent ring-2 ring-accent/40'
           : focused

@@ -55,6 +55,27 @@ test('setup → agent grid → add/remove → restored on relaunch', async () =>
 
   await page.screenshot({ path: 'test-results/grid.png' })
 
+  // Three tiles: two on top, the third stretches across the bottom row.
+  const box = async (i: number) => (await tiles.nth(i).boundingBox())!
+  const [top0, top1, bottom] = [await box(0), await box(1), await box(2)]
+  expect(bottom.width).toBeGreaterThan(top0.width + top1.width)
+
+  // Dragging dividers resizes tiles on both axes.
+  const drag = async (divider: Locator, dx: number, dy: number) => {
+    const d = (await divider.boundingBox())!
+    await page.mouse.move(d.x + d.width / 2, d.y + d.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(d.x + d.width / 2 + dx, d.y + d.height / 2 + dy, { steps: 5 })
+    await page.mouse.up()
+  }
+  await drag(page.getByTestId('grid-divider-col'), 120, 0)
+  expect((await box(0)).width).toBeCloseTo(top0.width + 120, -1)
+  expect((await box(1)).width).toBeCloseTo(top1.width - 120, -1)
+  await drag(page.getByTestId('grid-divider-row'), 0, 80)
+  expect((await box(0)).height).toBeCloseTo(top0.height + 80, -1)
+  expect((await box(2)).height).toBeCloseTo(bottom.height - 80, -1)
+  await page.screenshot({ path: 'test-results/resized.png' })
+
   // Maximize one agent, then restore the grid; hidden agents keep running.
   await page.getByLabel('Maximize Claude 2').click()
   await expect(tiles.nth(1)).toBeVisible()
