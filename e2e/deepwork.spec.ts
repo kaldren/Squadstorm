@@ -3,7 +3,10 @@ import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// Streams live SomaFM radio, so this needs network access.
+// Streams live SomaFM radio, so this needs network access. Skipped in CI so a
+// SomaFM outage can't block merges; set LEYA_NETWORK_TESTS=1 to run it there.
+test.skip(!!process.env.CI && !process.env.LEYA_NETWORK_TESTS, 'needs live SomaFM')
+
 test('deep work: plays a SomaFM station, switches stations, stops', async () => {
   const userData = mkdtempSync(join(tmpdir(), 'leya-e2e-data-'))
   const project = realpathSync(mkdtempSync(join(tmpdir(), 'leya-e2e-project-')))
