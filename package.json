@@ -1,5 +1,5 @@
 {
-  "name": "leya",
+  "name": "squadstorm-ide",
   "version": "0.1.0",
   "description": "Lightweight AI-first IDE for running many coding agents side by side",
   "main": "./out/main/index.js",
@@ -49,8 +49,8 @@
     "vitest": "^5.0.5"
   },
   "build": {
-    "appId": "dev.leya.app",
-    "productName": "Leya",
+    "appId": "dev.squadstorm-ide.app",
+    "productName": "Squadstorm IDE",
     "directories": {
       "output": "dist"
     },

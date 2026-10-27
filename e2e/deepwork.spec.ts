@@ -4,15 +4,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 // Streams live SomaFM radio, so this needs network access. Skipped in CI so a
-// SomaFM outage can't block merges; set LEYA_NETWORK_TESTS=1 to run it there.
-test.skip(!!process.env.CI && !process.env.LEYA_NETWORK_TESTS, 'needs live SomaFM')
+// SomaFM outage can't block merges; set SQUADSTORM_NETWORK_TESTS=1 to run it there.
+test.skip(!!process.env.CI && !process.env.SQUADSTORM_NETWORK_TESTS, 'needs live SomaFM')
 
 test('deep work: plays a SomaFM station, switches stations, stops', async () => {
-  const userData = mkdtempSync(join(tmpdir(), 'leya-e2e-data-'))
-  const project = realpathSync(mkdtempSync(join(tmpdir(), 'leya-e2e-project-')))
+  const userData = mkdtempSync(join(tmpdir(), 'squadstorm-e2e-data-'))
+  const project = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-project-')))
   const app = await electron.launch({
     args: ['.'],
-    env: { ...process.env, LEYA_E2E: '1', LEYA_USER_DATA: userData, LEYA_AGENT_CMD: 'exec cat' }
+    env: { ...process.env, SQUADSTORM_E2E: '1', SQUADSTORM_USER_DATA: userData, SQUADSTORM_AGENT_CMD: 'exec cat' }
   })
   await app.evaluate(({ dialog }, folder) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] })

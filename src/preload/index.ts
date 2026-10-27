@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { LeyaApi } from '@shared/api'
+import type { SquadstormApi } from '@shared/api'
 
 function subscribe<T>(channel: string, listener: (id: string, payload: T) => void): () => void {
   const handler = (_e: IpcRendererEvent, id: string, payload: T) => listener(id, payload)
@@ -7,7 +7,7 @@ function subscribe<T>(channel: string, listener: (id: string, payload: T) => voi
   return () => ipcRenderer.removeListener(channel, handler)
 }
 
-const api: LeyaApi = {
+const api: SquadstormApi = {
   state: {
     load: () => ipcRenderer.invoke('state:load'),
     save: (state) => ipcRenderer.invoke('state:save', state)
