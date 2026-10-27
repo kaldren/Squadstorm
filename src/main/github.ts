@@ -6,10 +6,10 @@ import type { CloneResult, GithubRepo, GithubStatus } from '@shared/api'
 import { parseRepo, repoFullName } from '@shared/github'
 import { resolveCommand, shellPath } from './shell-env'
 
-// LEYA_GIT_BASE swaps github.com for another git host and bypasses gh (e2e tests point it at a
-// local folder of repos); LEYA_REPOS_DIR moves where clones land.
-const gitBase = () => process.env.LEYA_GIT_BASE
-const reposDir = () => process.env.LEYA_REPOS_DIR ?? join(homedir(), 'Leya', 'repos')
+// SQUADSTORM_GIT_BASE swaps github.com for another git host and bypasses gh (e2e tests point it at a
+// local folder of repos); SQUADSTORM_REPOS_DIR moves where clones land.
+const gitBase = () => process.env.SQUADSTORM_GIT_BASE
+const reposDir = () => process.env.SQUADSTORM_REPOS_DIR ?? join(homedir(), 'SquadstormIDE', 'repos')
 
 export async function gitEnv(): Promise<NodeJS.ProcessEnv> {
   // Never let git block on an interactive credential prompt nobody can see.

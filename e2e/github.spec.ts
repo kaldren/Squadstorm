@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const root = realpathSync(mkdtempSync(join(tmpdir(), 'leya-e2e-github-')))
+const root = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-github-')))
 const userData = join(root, 'data')
 const gitBase = join(root, 'remote')
 const reposDir = join(root, 'repos')
@@ -23,11 +23,11 @@ function launch(): Promise<ElectronApplication> {
     args: ['.'],
     env: {
       ...process.env,
-      LEYA_E2E: '1',
-      LEYA_USER_DATA: userData,
-      LEYA_GIT_BASE: gitBase,
-      LEYA_REPOS_DIR: reposDir,
-      LEYA_AGENT_CMD: 'echo "fake agent in $(pwd)"; exec cat'
+      SQUADSTORM_E2E: '1',
+      SQUADSTORM_USER_DATA: userData,
+      SQUADSTORM_GIT_BASE: gitBase,
+      SQUADSTORM_REPOS_DIR: reposDir,
+      SQUADSTORM_AGENT_CMD: 'echo "fake agent in $(pwd)"; exec cat'
     }
   })
 }
@@ -50,7 +50,7 @@ test('clone a GitHub repo → agents run inside the clone', async () => {
   const id = await tile.getAttribute('data-agent-id')
   await expect
     .poll(() =>
-      app.evaluate((_e, agentId) => (globalThis as any).__leyaPtys.backlogs()[agentId!] ?? '', id)
+      app.evaluate((_e, agentId) => (globalThis as any).__squadstormPtys.backlogs()[agentId!] ?? '', id)
     )
     .toContain(`fake agent in ${clone}`)
 

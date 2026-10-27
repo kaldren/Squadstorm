@@ -40,7 +40,7 @@ export interface CloneResult {
   reused: boolean
 }
 
-export interface LeyaApi {
+export interface SquadstormApi {
   state: {
     load(): Promise<AppState>
     save(state: AppState): Promise<void>

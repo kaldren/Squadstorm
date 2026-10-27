@@ -7,9 +7,9 @@ import { join } from 'node:path'
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' })
 
 test('changes: see diffs, commit and push', async () => {
-  const userData = mkdtempSync(join(tmpdir(), 'leya-e2e-data-'))
-  const remote = realpathSync(mkdtempSync(join(tmpdir(), 'leya-e2e-remote-')))
-  const project = realpathSync(mkdtempSync(join(tmpdir(), 'leya-e2e-project-')))
+  const userData = mkdtempSync(join(tmpdir(), 'squadstorm-e2e-data-'))
+  const remote = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-remote-')))
+  const project = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-project-')))
   git(remote, 'init', '-q', '--bare', '-b', 'main')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'e2e@example.com')
@@ -28,7 +28,7 @@ test('changes: see diffs, commit and push', async () => {
 
   const app = await electron.launch({
     args: ['.'],
-    env: { ...process.env, LEYA_E2E: '1', LEYA_USER_DATA: userData, LEYA_AGENT_CMD: 'exec cat' }
+    env: { ...process.env, SQUADSTORM_E2E: '1', SQUADSTORM_USER_DATA: userData, SQUADSTORM_AGENT_CMD: 'exec cat' }
   })
   await app.evaluate(({ dialog }, folder) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] })

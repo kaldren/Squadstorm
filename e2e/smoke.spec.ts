@@ -3,18 +3,18 @@ import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const userData = mkdtempSync(join(tmpdir(), 'leya-e2e-data-'))
-const project = realpathSync(mkdtempSync(join(tmpdir(), 'leya-e2e-project-')))
+const userData = mkdtempSync(join(tmpdir(), 'squadstorm-e2e-data-'))
+const project = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-project-')))
 
 function launch(): Promise<ElectronApplication> {
   return electron.launch({
     args: ['.'],
     env: {
       ...process.env,
-      LEYA_E2E: '1',
-      LEYA_USER_DATA: userData,
+      SQUADSTORM_E2E: '1',
+      SQUADSTORM_USER_DATA: userData,
       // Stand-in for claude/codex: prints its cwd, then echoes input.
-      LEYA_AGENT_CMD: 'echo "fake agent in $(pwd)"; exec cat'
+      SQUADSTORM_AGENT_CMD: 'echo "fake agent in $(pwd)"; exec cat'
     }
   })
 }
@@ -22,7 +22,7 @@ function launch(): Promise<ElectronApplication> {
 async function output(app: ElectronApplication, tile: Locator): Promise<string> {
   const id = await tile.getAttribute('data-agent-id')
   return app.evaluate((_electron, agentId) => {
-    const ptys = (globalThis as any).__leyaPtys
+    const ptys = (globalThis as any).__squadstormPtys
     return ptys.backlogs()[agentId!] ?? ''
   }, id)
 }
@@ -92,7 +92,7 @@ test('setup → agent grid → add/remove → restored on relaunch', async () =>
   const removedId = await tiles.first().getAttribute('data-agent-id')
   await page.getByLabel('Remove Claude 1').click()
   await expect(tiles).toHaveCount(3)
-  const live = await app.evaluate(() => Object.keys((globalThis as any).__leyaPtys.backlogs()))
+  const live = await app.evaluate(() => Object.keys((globalThis as any).__squadstormPtys.backlogs()))
   expect(live).not.toContain(removedId)
   expect(live).toHaveLength(3)
 

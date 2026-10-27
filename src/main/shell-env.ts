@@ -3,7 +3,7 @@ import { accessSync, constants } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, join } from 'node:path'
 
-const MARKER = '__LEYA_PATH__'
+const MARKER = '__SQUADSTORM_PATH__'
 
 let cachedPath: Promise<string> | null = null
 
