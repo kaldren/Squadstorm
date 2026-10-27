@@ -50,7 +50,7 @@
   },
   "build": {
     "appId": "dev.squadstorm-ide.app",
-    "productName": "Squadstorm IDE",
+    "productName": "Squadstorm",
     "directories": {
       "output": "dist"
     },

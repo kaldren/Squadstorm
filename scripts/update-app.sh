@@ -8,10 +8,10 @@ REF="${1:-main}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$HOME/Library/Caches/squadstorm-ide/build"
 LOCK_DIR="$HOME/Library/Caches/squadstorm-ide/update.lock"
-DEST="${APP_DEST:-/Applications/Squadstorm IDE.app}"
+DEST="${APP_DEST:-/Applications/Squadstorm.app}"
 
 notify() {
-  osascript -e "display notification \"$1\" with title \"Squadstorm IDE\"" >/dev/null 2>&1 || true
+  osascript -e "display notification \"$1\" with title \"Squadstorm\"" >/dev/null 2>&1 || true
 }
 
 mkdir -p "$(dirname "$BUILD_DIR")"
@@ -38,14 +38,18 @@ pnpm install --frozen-lockfile
 pnpm exec electron-vite build
 pnpm exec electron-builder --mac --dir
 
-BUILT="$(find "$BUILD_DIR/dist" -maxdepth 2 -name 'Squadstorm IDE.app' -type d | head -n 1)"
+BUILT="$(find "$BUILD_DIR/dist" -maxdepth 2 -name 'Squadstorm.app' -type d | head -n 1)"
 [ -n "$BUILT" ]
 
-if pgrep -f "$DEST/Contents/MacOS/" >/dev/null; then
-  notify "Update ready — it will install when you quit Squadstorm IDE."
+LEGACY_DEST="$(dirname "$DEST")/Squadstorm IDE.app"
+running() { pgrep -f "$DEST/Contents/MacOS/" >/dev/null || pgrep -f "$LEGACY_DEST/Contents/MacOS/" >/dev/null; }
+
+if running; then
+  notify "Update ready — it will install when you quit Squadstorm."
   echo "App is running; waiting for it to quit."
-  while pgrep -f "$DEST/Contents/MacOS/" >/dev/null; do sleep 5; done
+  while running; do sleep 5; done
 fi
+rm -rf "$LEGACY_DEST"
 
 STAGING="$DEST.new"
 rm -rf "$STAGING"
