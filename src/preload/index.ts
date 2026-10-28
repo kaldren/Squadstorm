@@ -26,6 +26,8 @@ const api: SquadstormApi = {
   },
   files: {
     list: (root, dir) => ipcRenderer.invoke('files:list', root, dir),
+    all: (root) => ipcRenderer.invoke('files:all', root),
+    search: (root, query) => ipcRenderer.invoke('files:search', root, query),
     read: (root, path) => ipcRenderer.invoke('files:read', root, path),
     write: (root, path, content) => ipcRenderer.invoke('files:write', root, path, content),
     watch: (root) => ipcRenderer.send('files:watch', root),

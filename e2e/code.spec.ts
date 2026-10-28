@@ -1,4 +1,5 @@
 import { _electron as electron, expect, test } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -56,6 +57,132 @@ test('code view: browse, edit, save, follow agent edits, switch back', async () 
   await page.getByRole('tab', { name: 'Code' }).click()
   await expect(editor).toContainText('export const changed = true')
   await expect(page.getByTestId('editor-tab')).toHaveCount(1)
+
+  await app.close()
+})
+
+test('code view: ⌘P finds and opens files', async () => {
+  const userData = mkdtempSync(join(tmpdir(), 'squadstorm-e2e-data-'))
+  const project = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-project-')))
+  mkdirSync(join(project, 'src', 'components'), { recursive: true })
+  mkdirSync(join(project, 'node_modules', 'pkg'), { recursive: true })
+  writeFileSync(join(project, 'src', 'components', 'CodeView.tsx'), 'export const view = 1\n')
+  writeFileSync(join(project, 'src', 'index.ts'), '')
+  writeFileSync(join(project, 'node_modules', 'pkg', 'view.js'), '')
+
+  const app = await electron.launch({
+    args: ['.'],
+    env: { ...process.env, SQUADSTORM_E2E: '1', SQUADSTORM_USER_DATA: userData, SQUADSTORM_AGENT_CMD: 'exec cat' }
+  })
+  await app.evaluate(({ dialog }, folder) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] })
+  }, project)
+  const page = await app.firstWindow()
+  await page.getByTestId('pick-folder').click()
+  await page.getByTestId('start').click()
+  await page.getByRole('tab', { name: 'Code' }).click()
+  await expect(page.getByTestId('file-entry')).toHaveCount(2)
+
+  // Not a git repo: every file is searched except node_modules.
+  const input = page.getByTestId('quick-open-input')
+  const results = page.getByTestId('quick-open-result')
+  await page.keyboard.press('Meta+p')
+  await input.fill('view')
+  await expect(results).toHaveText([/^CodeView\.tsx/])
+  await page.screenshot({ path: 'test-results/quick-open.png' })
+  await page.keyboard.press('Enter')
+  await expect(input).toBeHidden()
+  await expect(page.getByTestId('editor-tab')).toHaveText([/^CodeView\.tsx/])
+  await expect(page.locator('.cm-content')).toContainText('export const view = 1')
+
+  // Escape closes without opening anything; files added since are found next time.
+  writeFileSync(join(project, 'src', 'later.ts'), '')
+  await page.getByTestId('quick-open').click()
+  await input.fill('later')
+  await expect(results).toHaveText([/^later\.ts/])
+  await page.keyboard.press('Escape')
+  await expect(input).toBeHidden()
+  await expect(page.getByTestId('editor-tab')).toHaveCount(1)
+
+  // In a git repo, ignored files are left out.
+  execFileSync('git', ['init', '-q'], { cwd: project })
+  writeFileSync(join(project, '.gitignore'), 'dist/\n')
+  mkdirSync(join(project, 'dist'))
+  writeFileSync(join(project, 'dist', 'index.js'), '')
+  await page.keyboard.press('Meta+p')
+  await input.fill('index')
+  await expect(results).toHaveText([/^index\.ts/])
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('editor-tab')).toHaveText([/^CodeView\.tsx/, /^index\.ts/])
+
+  await app.close()
+})
+
+test('code view: ⌘⇧F searches file contents and jumps to matches', async () => {
+  const userData = mkdtempSync(join(tmpdir(), 'squadstorm-e2e-data-'))
+  const project = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-project-')))
+  mkdirSync(join(project, 'src'))
+  writeFileSync(join(project, 'src', 'a.ts'), 'export const answer = 42\n// Answer: forty-two\nconst answers = [answer]\n')
+  writeFileSync(join(project, 'README.md'), '# The answer\n')
+
+  const app = await electron.launch({
+    args: ['.'],
+    env: { ...process.env, SQUADSTORM_E2E: '1', SQUADSTORM_USER_DATA: userData, SQUADSTORM_AGENT_CMD: 'exec cat' }
+  })
+  await app.evaluate(({ dialog }, folder) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] })
+  }, project)
+  const page = await app.firstWindow()
+  await page.getByTestId('pick-folder').click()
+  await page.getByTestId('start').click()
+  await page.getByRole('tab', { name: 'Code' }).click()
+  await expect(page.getByTestId('file-entry')).toHaveCount(2)
+
+  const input = page.getByTestId('search-input')
+  const summary = page.getByTestId('search-summary')
+  const matches = page.getByTestId('search-match')
+  await page.keyboard.press('Meta+Shift+f')
+  await expect(input).toBeFocused()
+  await page.keyboard.type('answer')
+  await expect(summary).toHaveText(/^5 results in 2 files/)
+  await expect(page.getByTestId('search-file')).toHaveText([/^▾README\.md1/, /^▾a\.tssrc4/])
+
+  // Toggles narrow the results: case, then whole word, then a regex.
+  await page.getByRole('button', { name: 'Match Case' }).click()
+  await expect(summary).toHaveText(/^4 results in 2 files/)
+  await page.keyboard.press('Alt+KeyW')
+  await expect(summary).toHaveText(/^3 results in 2 files/)
+  await expect(page.getByRole('button', { name: 'Match Whole Word' })).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Use Regular Expression' }).click()
+  await input.fill('\\w+s')
+  await expect(summary).toHaveText(/^1 result in 1 file/)
+  await input.fill('answer(')
+  await expect(summary).toHaveText(/Invalid regex/)
+
+  // Include / exclude globs.
+  await page.getByRole('button', { name: 'Match Whole Word' }).click()
+  await page.getByRole('button', { name: 'Use Regular Expression' }).click()
+  await input.fill('answer')
+  await expect(summary).toHaveText(/^4 results in 2 files/)
+  await page.getByRole('button', { name: 'Toggle Search Details' }).click()
+  await page.getByTestId('search-exclude').fill('*.md')
+  await expect(summary).toHaveText(/^3 results in 1 file/)
+  await page.screenshot({ path: 'test-results/search.png' })
+
+  // Clicking a match opens the file with the match selected.
+  await matches.nth(2).click()
+  await expect(page.getByTestId('editor-tab')).toHaveText([/^a\.ts/])
+  await expect(page.locator('.cm-activeLine')).toHaveText('const answers = [answer]')
+  // The selection is drawn, not native; CodeMirror marks the other occurrences of it, though.
+  await expect(page.locator('.cm-editor')).toHaveClass(/cm-focused/)
+  await expect(page.locator('.cm-selectionBackground')).toHaveCount(1)
+  await expect(page.locator('.cm-activeLine .cm-selectionMatch')).toHaveText('answer')
+  await expect(matches.nth(2)).toHaveAttribute('aria-selected', 'true')
+
+  // Files agents write show up in the results without searching again.
+  writeFileSync(join(project, 'src', 'b.ts'), 'answer\n')
+  await expect(summary).toHaveText(/^4 results in 2 files/)
 
   await app.close()
 })

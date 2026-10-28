@@ -11,7 +11,17 @@ interface Props {
   root: string
   tabs: string[]
   active: string | null
+  /** A spot to select and scroll to, e.g. a search match. A new object reveals it again. */
+  reveal: Reveal | null
   onDirty(path: string, dirty: boolean): void
+}
+
+export interface Reveal {
+  path: string
+  /** 1-based. */
+  line: number
+  column: number
+  length: number
 }
 
 /** An open file: its editor state (undo history included) and what is on disk. */
@@ -36,13 +46,15 @@ export const editorTheme = [
   )
 ]
 
-export function CodeEditor({ root, tabs, active, onDirty }: Props) {
+export function CodeEditor({ root, tabs, active, reveal, onDirty }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const buffers = useRef(new Map<string, Buffer>())
   /** The path whose state is currently live in the view; its Buffer.state is stale meanwhile. */
   const shownRef = useRef<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  /** A reveal waiting for its file to load or come on screen. */
+  const pendingReveal = useRef<Reveal | null>(null)
   // Extensions are built once per file, so they reach the latest props through refs.
   const propsRef = useRef({ root, onDirty })
   propsRef.current = { root, onDirty }
@@ -95,6 +107,16 @@ export function CodeEditor({ root, tabs, active, onDirty }: Props) {
     return state
   }
 
+  const applyReveal = (view: EditorView, r: Reveal) => {
+    const doc = view.state.doc
+    // The file may have changed since it was searched; stay inside it.
+    const line = doc.line(Math.min(Math.max(r.line, 1), doc.lines))
+    const from = Math.min(line.from + r.column, line.to)
+    const to = Math.min(from + r.length, line.to)
+    view.dispatch({ selection: { anchor: from, head: to }, effects: EditorView.scrollIntoView(from, { y: 'center' }) })
+    view.focus()
+  }
+
   const show = (path: string | null) => {
     const view = viewRef.current!
     const prev = shownRef.current
@@ -111,6 +133,12 @@ export function CodeEditor({ root, tabs, active, onDirty }: Props) {
     view.setState(buffer.state)
     shownRef.current = path
     setMessage(null)
+    const r = pendingReveal.current
+    if (r?.path === path) {
+      pendingReveal.current = null
+      requestAnimationFrame(() => applyReveal(view, r))
+      return
+    }
     requestAnimationFrame(() => {
       view.scrollDOM.scrollTop = buffer.scrollTop
       view.focus()
@@ -121,6 +149,19 @@ export function CodeEditor({ root, tabs, active, onDirty }: Props) {
     viewRef.current = new EditorView({ parent: hostRef.current! })
     return () => viewRef.current?.destroy()
   }, [])
+
+  // A file's first showing focuses it in show(), but the host is still invisible then and
+  // refuses focus; try again once it is visible.
+  useEffect(() => {
+    if (message === null) viewRef.current?.focus()
+  }, [message])
+
+  // Declared before the file switch below so a reveal into another file is pending by the time it shows.
+  useEffect(() => {
+    if (!reveal) return
+    if (shownRef.current === reveal.path && viewRef.current) applyReveal(viewRef.current, reveal)
+    else pendingReveal.current = reveal
+  }, [reveal])
 
   // Switch files, loading from disk the first time a file is opened.
   useEffect(() => {

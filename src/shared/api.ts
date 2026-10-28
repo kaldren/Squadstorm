@@ -1,4 +1,5 @@
 import type { FileEntry, ReadResult } from './files'
+import type { SearchQuery, SearchResult } from './search'
 import type { Commit, DiffSides, FileChange, GitStatus } from './git'
 import type { AppState } from './types'
 import type { Provider } from './providers'
@@ -58,6 +59,10 @@ export interface SquadstormApi {
   /** Paths are relative to the workspace root and `/`-separated. */
   files: {
     list(root: string, dir: string): Promise<FileEntry[]>
+    /** Every file in the workspace, honoring .gitignore when it is a git repo. */
+    all(root: string): Promise<string[]>
+    /** Searches file contents. A newer search of the same root cuts an older one short. */
+    search(root: string, query: SearchQuery): Promise<SearchResult>
     read(root: string, path: string): Promise<ReadResult>
     write(root: string, path: string, content: string): Promise<void>
     watch(root: string): void

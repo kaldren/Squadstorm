@@ -1,7 +1,7 @@
 import { watch, type FSWatcher } from 'node:fs'
 import { open, readdir, stat, writeFile } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
-import { isHidden, isWatched, sortEntries, type FileEntry, type ReadResult } from '@shared/files'
+import { isHidden, isSearched, isWatched, sortEntries, type FileEntry, type ReadResult } from '@shared/files'
 
 const MAX_EDITABLE_BYTES = 2 * 1024 * 1024
 
@@ -26,6 +26,23 @@ export async function listDir(root: string, dir: string): Promise<FileEntry[]> {
         dir: d.isDirectory()
       }))
   )
+}
+
+/** Every file under the root, for searching outside a git repo. Stops at `limit` files. */
+export async function walkFiles(root: string, limit = 20_000): Promise<string[]> {
+  const files: string[] = []
+  const queue = ['']
+  while (queue.length > 0 && files.length < limit) {
+    const dir = queue.shift()!
+    const dirents = await readdir(resolveInside(root, dir), { withFileTypes: true }).catch(() => [])
+    for (const d of dirents) {
+      if (isHidden(d.name) || !isSearched(d.name)) continue
+      const path = dir ? `${dir}/${d.name}` : d.name
+      if (d.isDirectory()) queue.push(path)
+      else if (files.length < limit) files.push(path)
+    }
+  }
+  return files
 }
 
 export async function readText(root: string, path: string): Promise<ReadResult> {

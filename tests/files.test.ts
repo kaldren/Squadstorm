@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveInside } from '../src/main/files'
-import { isWatched, parentDir, sortEntries } from '../src/shared/files'
+import { fuzzyMatch, isWatched, parentDir, searchFiles, sortEntries } from '../src/shared/files'
 
 describe('resolveInside', () => {
   it('resolves paths within the root', () => {
@@ -40,4 +40,38 @@ describe('isWatched', () => {
 it('parentDir', () => {
   expect(parentDir('a.ts')).toBe('')
   expect(parentDir('src/lib/a.ts')).toBe('src/lib')
+})
+
+describe('fuzzyMatch', () => {
+  it('matches characters in order, ignoring case and spaces', () => {
+    expect(fuzzyMatch('cv', 'src/CodeView.tsx')?.positions).toEqual([4, 8])
+    expect(fuzzyMatch('code view', 'src/CodeView.tsx')).not.toBeNull()
+    expect(fuzzyMatch('vc', 'src/CodeView.tsx')).toBeNull()
+  })
+
+  it('prefers matches in the file name', () => {
+    expect(fuzzyMatch('src', 'src/renderer/src/a.ts')?.positions).toEqual([13, 14, 15])
+  })
+})
+
+describe('searchFiles', () => {
+  const paths = [
+    'src/renderer/src/components/CodeEditor.tsx',
+    'src/renderer/src/components/CodeView.tsx',
+    'tests/fixtures/deep/view.ts',
+    'src/view.ts',
+    'README.md'
+  ]
+
+  it('ranks name and boundary matches first', () => {
+    expect(searchFiles('codeview', paths)[0].path).toBe('src/renderer/src/components/CodeView.tsx')
+    expect(searchFiles('cv', paths)[0].path).toBe('src/renderer/src/components/CodeView.tsx')
+    expect(searchFiles('view', paths).map((m) => m.path).slice(0, 2)).toEqual(['src/view.ts', 'tests/fixtures/deep/view.ts'])
+  })
+
+  it('drops non-matches and keeps order for an empty query', () => {
+    expect(searchFiles('zzz', paths)).toEqual([])
+    expect(searchFiles('', paths).map((m) => m.path)).toEqual(paths)
+    expect(searchFiles('', paths, 2)).toHaveLength(2)
+  })
 })

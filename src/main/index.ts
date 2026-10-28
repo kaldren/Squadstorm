@@ -1,11 +1,13 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
 import type { SpawnRequest } from '@shared/api'
+import type { SearchQuery } from '@shared/search'
 import type { AppState } from '@shared/types'
 import { FileWatchers, listDir, readText, writeText } from './files'
 import { gitCommit, gitCommitDiff, gitCommitFiles, gitDiff, gitLog, gitPush, gitStatus } from './git'
 import { cloneRepo, githubStatus, listRepos } from './github'
 import { PtyManager } from './pty'
+import { allFiles, searchWorkspace } from './search'
 import { migrateFromOldNames } from './migrate'
 import { loadState, saveState } from './store'
 
@@ -22,6 +24,8 @@ const ptys = new PtyManager((channel, id, payload) => {
 const fileWatchers = new FileWatchers((root, paths) => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('files:changed', root, paths)
 })
+
+const searchIds = new Map<string, number>()
 
 // Terminal text is drawn on a WebGL canvas, so e2e tests read pty output from here instead.
 if (process.env.SQUADSTORM_E2E) Object.assign(globalThis, { __squadstormPtys: ptys })
@@ -85,6 +89,13 @@ function registerIpc(): void {
   )
 
   ipcMain.handle('files:list', (_e, root: string, dir: string) => listDir(root, dir))
+  ipcMain.handle('files:all', (_e, root: string) => allFiles(root))
+  ipcMain.handle('files:search', (_e, root: string, query: SearchQuery) => {
+    // Only the newest search per root matters; older ones stop at the next file.
+    const id = (searchIds.get(root) ?? 0) + 1
+    searchIds.set(root, id)
+    return searchWorkspace(root, query, () => searchIds.get(root) !== id)
+  })
   ipcMain.handle('files:read', (_e, root: string, path: string) => readText(root, path))
   ipcMain.handle('files:write', (_e, root: string, path: string, content: string) =>
     writeText(root, path, content)
