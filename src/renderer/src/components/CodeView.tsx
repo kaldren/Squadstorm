@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import type { Commit, FileChange } from '@shared/git'
 import { ChangesPanel, useGitStatus } from './ChangesPanel'
-import { CodeEditor } from './CodeEditor'
+import type { TextMatch } from '@shared/search'
+import { CodeEditor, type Reveal } from './CodeEditor'
 import { DiffView } from './DiffView'
 import { FileTree } from './FileTree'
 import { HistoryPanel } from './HistoryPanel'
+import { QuickOpen } from './QuickOpen'
+import { SearchPanel } from './SearchPanel'
 
 const basename = (path: string) => path.split('/').pop() ?? path
 
@@ -13,10 +16,14 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
   const [tabs, setTabs] = useState<string[]>([])
   const [active, setActive] = useState<string | null>(null)
   const [dirty, setDirty] = useState<ReadonlySet<string>>(new Set())
-  const [side, setSide] = useState<'files' | 'changes' | 'history'>('files')
+  const [side, setSide] = useState<'files' | 'search' | 'changes' | 'history'>('files')
+  const [reveal, setReveal] = useState<Reveal | null>(null)
+  const [searchFocus, setSearchFocus] = useState(0)
+  const [searchSelected, setSearchSelected] = useState<{ path: string; match: TextMatch } | null>(null)
   // A selected change replaces the editor with its diff until a file or tab is picked.
   // With a commit it is that commit's change to the file, otherwise the uncommitted one.
   const [diff, setDiff] = useState<{ change: FileChange; commit?: Commit } | null>(null)
+  const [searching, setSearching] = useState(false)
   const git = useGitStatus(root, !hidden)
 
   // Once a change is committed or reverted, its diff has nothing left to show.
@@ -31,8 +38,31 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
     return () => window.api.files.unwatch(root)
   }, [root])
 
-  const open = (path: string) => {
+  // ⌘P (Ctrl+P elsewhere) finds files by name, ⌘⇧F searches their contents.
+  // Capture phase, so they beat the editor's keymap.
+  useEffect(() => {
+    if (hidden) return
+    const mac = navigator.platform.startsWith('Mac')
+    const onKeyDown = (e: KeyboardEvent) => {
+      const combo = mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
+      if (!combo || e.altKey) return
+      const key = e.key.toLowerCase()
+      if (key === 'p' && !e.shiftKey) setSearching(true)
+      else if (key === 'f' && e.shiftKey) {
+        setSide('search')
+        setSearchFocus((n) => n + 1)
+      } else return
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [hidden])
+
+  const open = (path: string, at?: TextMatch) => {
     setDiff(null)
+    setSearchSelected(at ? { path, match: at } : null)
+    if (at) setReveal({ path, line: at.line, column: at.column, length: at.length })
     setTabs((t) => (t.includes(path) ? t : [...t, path]))
     setActive(path)
   }
@@ -56,18 +86,22 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
     })
 
   return (
-    <div className={`${hidden ? 'hidden' : 'flex'} min-h-0 flex-1`}>
+    <div className={`${hidden ? 'hidden' : 'flex'} relative min-h-0 flex-1`}>
+      {searching && <QuickOpen root={root} onOpen={open} onClose={() => setSearching(false)} />}
       <Group orientation="horizontal" className="h-full w-full">
         <Panel id="files" defaultSize={260} minSize={180} maxSize={480}>
           <div className="flex h-full flex-col border-r border-line bg-panel">
-            <div className="flex h-8 shrink-0 items-center gap-3 px-3 text-[11px] font-semibold uppercase tracking-wider">
-              {(['files', 'changes', 'history'] as const).map((s) => (
+            <div className="flex h-8 shrink-0 items-center gap-2.5 px-3 text-[11px] font-semibold uppercase tracking-wide">
+              {(['files', 'search', 'changes', 'history'] as const).map((s) => (
                 <button
                   key={s}
                   role="tab"
                   aria-selected={side === s}
                   className={`uppercase ${side === s ? 'text-fg' : 'text-muted hover:text-fg'}`}
-                  onClick={() => setSide(s)}
+                  onClick={() => {
+                    setSide(s)
+                    if (s === 'search') setSearchFocus((n) => n + 1)
+                  }}
                 >
                   {s}
                   {s === 'changes' && git.status.changes.length > 0 && (
@@ -77,10 +111,31 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
                   )}
                 </button>
               ))}
+              <button
+                className="ml-auto flex h-5 w-5 items-center justify-center rounded text-muted hover:bg-raised hover:text-fg"
+                title="Go to file (⌘P)"
+                aria-label="Go to file"
+                data-testid="quick-open"
+                onClick={() => setSearching(true)}
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.75">
+                  <path d="M9 1.75H4.25a1 1 0 0 0-1 1v10.5a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1V5.5L9 1.75Z" strokeLinejoin="round" />
+                  <path d="M9 1.75V5.5h3.75" strokeLinejoin="round" />
+                </svg>
+              </button>
             </div>
             {/* Both stay mounted so the tree keeps its expanded folders. */}
             <div className={side === 'files' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
               <FileTree root={root} activePath={diff ? null : active} onOpen={open} />
+            </div>
+            <div className={side === 'search' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+              <SearchPanel
+                root={root}
+                visible={!hidden && side === 'search'}
+                focusSignal={searchFocus}
+                selected={diff ? null : searchSelected}
+                onOpen={open}
+              />
             </div>
             <div className={side === 'changes' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
               <ChangesPanel
@@ -158,7 +213,7 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
               />
             )}
             <div className={diff ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
-              <CodeEditor root={root} tabs={tabs} active={active} onDirty={markDirty} />
+              <CodeEditor root={root} tabs={tabs} active={active} reveal={reveal} onDirty={markDirty} />
             </div>
           </div>
         </Panel>

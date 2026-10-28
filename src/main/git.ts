@@ -22,6 +22,14 @@ export async function gitStatus(root: string): Promise<GitStatus> {
   }
 }
 
+/** Tracked and untracked files, minus anything .gitignore excludes. Throws outside a repo. */
+export async function gitFiles(root: string): Promise<string[]> {
+  const out = await git(root, ['ls-files', '-z', '--cached', '--others', '--exclude-standard'])
+  // Tracked files deleted from disk would open as an error, so leave them out.
+  const deleted = new Set((await git(root, ['ls-files', '-z', '--deleted'])).split('\0'))
+  return [...new Set(out.split('\0'))].filter((p) => p && !deleted.has(p))
+}
+
 /** Most recent commits on HEAD, newest first. Empty for repos without commits yet. */
 export async function gitLog(root: string, limit = 200): Promise<Commit[]> {
   const out = await git(root, ['log', '-z', `--max-count=${limit}`, `--format=${LOG_FORMAT}`]).catch(() => '')
