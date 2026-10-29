@@ -5,7 +5,8 @@
 set -euo pipefail
 
 REF="${1:-main}"
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
+APP_DIR="apps/ide"
 BUILD_DIR="$HOME/Library/Caches/squadstorm-ide/build"
 LOCK_DIR="$HOME/Library/Caches/squadstorm-ide/update.lock"
 DEST="${APP_DEST:-/Applications/Squadstorm.app}"
@@ -35,10 +36,11 @@ fi
 
 cd "$BUILD_DIR"
 pnpm install --frozen-lockfile
+cd "$APP_DIR"
 pnpm exec electron-vite build
 pnpm exec electron-builder --mac --dir
 
-BUILT="$(find "$BUILD_DIR/dist" -maxdepth 2 -name 'Squadstorm.app' -type d | head -n 1)"
+BUILT="$(find "$BUILD_DIR/$APP_DIR/dist" -maxdepth 2 -name 'Squadstorm.app' -type d | head -n 1)"
 [ -n "$BUILT" ]
 
 LEGACY_DEST="$(dirname "$DEST")/Squadstorm IDE.app"
