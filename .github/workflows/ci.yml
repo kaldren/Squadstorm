@@ -48,5 +48,5 @@ jobs:
         with:
           name: e2e-results
           path: |
-            test-results/
-            playwright-report/
+            apps/*/test-results/
+            apps/*/playwright-report/
