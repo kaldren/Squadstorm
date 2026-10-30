@@ -33,7 +33,7 @@ All paths under `apps/ide/`.
   - "Show code" sets the scope through a new store field `codeScope[workspaceId]`.
 - `src/renderer/src/screens/Setup.tsx` (modified): the "Give each agent its own worktree" checkbox (`data-testid="isolate"`), shown when the chosen folder is a git repo (checked with `git.status`), or always for GitHub clones.
 - `e2e/worktrees.spec.ts` (new): AC1–AC3, AC5, AC6, AC8. It uses a temp git repo with an initial commit, `SQUADSTORM_WORKTREES_DIR` pointing to a temp dir, and a fake agent that prints `pwd`, its branch, and then runs commands it reads from stdin, so the test can make it write and commit files.
-- `tests/store.test.ts` (new, small): `loadState` keeps workspaces and agents without the new fields (AC7).
+- `src/shared/state.ts` (new) and `src/main/store.ts` (modified): the validation inside `loadState` moves to a pure `normalizeState(parsed)`, so it can be tested without Electron. `tests/store.test.ts` (new) checks that state without the new fields, and state with them, both load (AC7).
 - `README.md` (app): a short "Worktrees" paragraph under Features.
 
 ## Order of work
