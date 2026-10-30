@@ -55,7 +55,7 @@ Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill.
 - They're inserted single-quoted and space-separated, as a bracketed paste.
 
 ## Flagged concerns
-- [ ] **Plain `path:lines` instead of Claude Code's `@path#L1-10`.** In the terminal, `@` starts each CLI's own file picker, and the two CLIs differ. A plain path works for both, and both read the file themselves. Proposed: plain, for both.
+- [x] **Plain `path:lines` instead of Claude Code's `@path#L1-10`.** In the terminal, `@` starts each CLI's own file picker, and the two CLIs differ. A plain path works for both, and both read the file themselves. **Resolved 2026-10-30: plain, for both.**
 - [ ] **⌘-click to open links** (VS Code's terminal convention), instead of a plain click that fights with text selection. Proposed: ⌘-click.
 - [ ] **Paths printed relative to some other folder** (e.g. a monorepo package) don't match the agent's cwd and won't link. Proposed: accept. Only paths that resolve and exist become links.
 - [ ] **Terminals as receivers.** Plain Terminal tiles are listed too, after the agents (useful for pasting a path into a shell). Proposed: keep them.
