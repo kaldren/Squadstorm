@@ -64,7 +64,7 @@ Depends on: agent-worktrees (per-agent scope, R5). Everything else stands on its
 **Per agent:** nothing extra. With agent-worktrees, each worktree has its own `CodeView` root, so its Changes panel, review and tree are already scoped.
 
 ## Flagged concerns
-- [ ] **Hunk discard has no confirmation and no undo.** Proposed: no confirmation (it's a deliberate click on one hunk). Instead, show a toast "Discarded 1 change in foo.ts" with **Undo**, which writes back the previous content, for 10 s. Or confirm every time?
+- [x] **Hunk discard has no confirmation and no undo.** Proposed: no confirmation (it's a deliberate click on one hunk). Instead, show a toast "Discarded 1 change in foo.ts" with **Undo**, which writes back the previous content, for 10 s. **Resolved 2026-10-30: discard at once, with the Undo toast.**
 - [ ] **Staging partial hunks** for commit (intent out of scope) stays out. Commit selection is per file.
 - [ ] **Where Review lives.** Proposed: the editor area, opened from the Changes panel (keeps the panel as the list, like VS Code's multi-diff editor). Alternative: a third top-level view next to Agents/Code.
 - [ ] **New files go to the Trash, but discarded edits to tracked files can't be recovered.** Proposed: accept, behind the confirmation.
