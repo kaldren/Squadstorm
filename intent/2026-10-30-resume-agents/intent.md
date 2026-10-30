@@ -1,6 +1,6 @@
 # Intent: Agents resume their conversations after a restart
 
-Author: Kaloyan (owner). Status: draft.
+Author: Kaloyan (owner). Status: Accepted.
 Origin: idea (gap analysis against VS Code, 2026-10-30). Issue: none.
 
 ## Problem

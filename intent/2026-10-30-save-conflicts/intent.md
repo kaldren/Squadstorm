@@ -1,6 +1,6 @@
 # Intent: Unsaved edits silently overwrite agent changes
 
-Author: Kaloyan (owner). Status: draft.
+Author: Kaloyan (owner). Status: Accepted.
 Origin: bug. Issue: none.
 
 ## Problem

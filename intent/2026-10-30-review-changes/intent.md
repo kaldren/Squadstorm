@@ -1,6 +1,6 @@
 # Intent: Review an agent's changes in one place and keep or discard them
 
-Author: Kaloyan (owner). Status: draft.
+Author: Kaloyan (owner). Status: Accepted.
 Origin: idea (gap analysis against VS Code, 2026-10-30). Issue: none.
 
 ## Problem

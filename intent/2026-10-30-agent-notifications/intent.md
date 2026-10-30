@@ -1,6 +1,6 @@
 # Intent: Know when an agent needs you
 
-Author: Kaloyan (owner). Status: draft.
+Author: Kaloyan (owner). Status: Accepted.
 Origin: idea (gap analysis against VS Code, 2026-10-30). Issue: none.
 
 ## Problem
