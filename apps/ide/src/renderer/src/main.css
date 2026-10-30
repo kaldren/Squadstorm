@@ -58,3 +58,19 @@ body {
 .cm-editor {
   user-select: text;
 }
+
+/* Discard buttons on hunks in the review view. */
+.cm-discard-hunk {
+  margin-left: 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--color-line);
+  background: var(--color-panel);
+  padding: 0 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+.cm-discard-hunk:hover {
+  color: var(--color-danger);
+}

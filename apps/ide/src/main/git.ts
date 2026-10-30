@@ -1,6 +1,7 @@
-import { readFile } from 'node:fs/promises'
-import { LOG_FORMAT, NOT_A_REPO, parseLog, parseNameStatus, parseStatus, type Commit, type FileChange, type DiffSides, type GitStatus } from '@shared/git'
-import { resolveInside } from './files'
+import { readFile, rm } from 'node:fs/promises'
+import { shell } from 'electron'
+import { LOG_FORMAT, NOT_A_REPO, parseLog, parseNameStatus, parseNumstat, parseStatus, type Commit, type FileChange, type DiffSides, type GitStatus, type LineStats } from '@shared/git'
+import { readText, resolveInside } from './files'
 import { gitEnv, run } from './github'
 import { resolveCommand } from './shell-env'
 
@@ -69,11 +70,67 @@ export async function gitDiff(root: string, path: string, from?: string): Promis
   return { original, modified }
 }
 
-/** Commits every change in the working tree, like `git commit -am` plus new files. */
-export async function gitCommit(root: string, message: string): Promise<void> {
+/**
+ * Commits every change in the working tree, like `git commit -am` plus new files; or, given `paths`,
+ * only those (other changes stay uncommitted, staged or not).
+ */
+export async function gitCommit(root: string, message: string, paths?: string[]): Promise<void> {
   if (!message.trim()) throw new Error('Write a commit message first.')
+  if (paths) {
+    if (paths.length === 0) throw new Error('Pick at least one file to commit.')
+    paths.forEach((p) => resolveInside(root, p))
+    await git(root, ['add', '-A', '--', ...paths])
+    await git(root, ['commit', '-m', message, '--', ...paths])
+    return
+  }
   await git(root, ['add', '-A'])
   await git(root, ['commit', '-m', message])
+}
+
+/** Lines added and removed per changed file, untracked files included; null counts for binary files. */
+export async function gitNumstat(root: string): Promise<Record<string, LineStats>> {
+  const hasHead = await git(root, ['rev-parse', '--verify', '--quiet', 'HEAD']).then(
+    () => true,
+    () => false
+  )
+  const stats = parseNumstat(await git(root, ['diff', '--numstat', '-z', hasHead ? 'HEAD' : EMPTY_TREE]))
+  // Untracked files aren't in the diff: every line is added.
+  for (const change of (await gitStatus(root)).changes) {
+    if (change.path in stats || change.kind !== 'A') continue
+    const read = await readText(root, change.path).catch(() => ({ error: 'unreadable' }))
+    stats[change.path] =
+      'error' in read ? { added: null, removed: null } : { added: read.content.split('\n').length - (read.content.endsWith('\n') ? 1 : 0), removed: 0 }
+  }
+  return stats
+}
+
+/** Moves a file to the Trash (e2e tests record it and delete it instead). */
+async function trash(root: string, path: string): Promise<void> {
+  const full = resolveInside(root, path)
+  if (process.env.SQUADSTORM_E2E) {
+    ;((globalThis as any).__squadstormTrashed ??= []).push(full)
+    await rm(full, { force: true })
+  } else {
+    await shell.trashItem(full)
+  }
+}
+
+/**
+ * Throws away a file's uncommitted change: tracked files go back to HEAD, new files go to the Trash,
+ * a rename is undone.
+ */
+export async function gitDiscard(root: string, change: FileChange): Promise<void> {
+  resolveInside(root, change.path)
+  if (change.kind === 'C') throw new Error(`${change.path} has a merge conflict. Resolve it first.`)
+  const restore = (path: string) => git(root, ['restore', '--source=HEAD', '--staged', '--worktree', '--', path])
+  const unstage = (path: string) => git(root, ['rm', '--cached', '--quiet', '--ignore-unmatch', '--', path])
+  if (change.kind === 'M' || change.kind === 'D') return void (await restore(change.path))
+  if (change.kind === 'R' && change.from) {
+    resolveInside(root, change.from)
+    await restore(change.from)
+  }
+  await unstage(change.path)
+  await trash(root, change.path)
 }
 
 export async function gitPush(root: string): Promise<void> {

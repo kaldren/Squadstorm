@@ -1,11 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron'
 import { join } from 'node:path'
 import type { AttentionNotice, SpawnRequest } from '@shared/api'
+import type { FileChange } from '@shared/git'
 import type { AgentWorktree } from '@shared/types'
 import type { SearchQuery } from '@shared/search'
 import type { AppState } from '@shared/types'
 import { FileWatchers, listDir, readText, writeText } from './files'
-import { gitCommit, gitCommitDiff, gitCommitFiles, gitDiff, gitLog, gitPush, gitStatus } from './git'
+import { gitCommit, gitCommitDiff, gitCommitFiles, gitDiff, gitDiscard, gitLog, gitNumstat, gitPush, gitStatus } from './git'
 import { cloneRepo, githubStatus, listRepos } from './github'
 import { PtyManager } from './pty'
 import { allFiles, searchWorkspace } from './search'
@@ -166,7 +167,11 @@ function registerIpc(): void {
     gitCommitDiff(root, hash, path, from)
   )
   ipcMain.handle('git:diff', (_e, root: string, path: string, from?: string) => gitDiff(root, path, from))
-  ipcMain.handle('git:commit', (_e, root: string, message: string) => gitCommit(root, message))
+  ipcMain.handle('git:commit', (_e, root: string, message: string, paths?: string[]) =>
+    gitCommit(root, message, Array.isArray(paths) ? paths.map(String) : undefined)
+  )
+  ipcMain.handle('git:numstat', (_e, root: string) => gitNumstat(root))
+  ipcMain.handle('git:discard', (_e, root: string, change: FileChange) => gitDiscard(root, change))
   ipcMain.handle('git:push', (_e, root: string) => gitPush(root))
 
   ipcMain.handle('worktrees:add', (_e, root: string, label: string) => addWorktree(root, label))

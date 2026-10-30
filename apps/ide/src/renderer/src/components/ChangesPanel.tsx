@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { NOT_A_REPO, type ChangeKind, type FileChange, type GitStatus } from '@shared/git'
+import { commitPathspec, NOT_A_REPO, type ChangeKind, type FileChange, type GitStatus } from '@shared/git'
 
 export const KIND_STYLE: Record<ChangeKind, { label: string; className: string }> = {
   M: { label: 'Modified', className: 'text-amber-400' },
@@ -55,11 +55,15 @@ interface Props {
   refresh(): Promise<void>
   selected: string | null
   onSelect(change: FileChange): void
+  /** Files left out of the next commit; everything else is in, new files included. */
+  unchecked: ReadonlySet<string>
+  onCheck(path: string, checked: boolean): void
+  onReview(): void
 }
 
-export function ChangesPanel({ root, status, loaded, statusError, refresh, selected, onSelect }: Props) {
+export function ChangesPanel({ root, status, loaded, statusError, refresh, selected, onSelect, unchecked, onCheck, onReview }: Props) {
   const [message, setMessage] = useState('')
-  const [busy, setBusy] = useState<'commit' | 'push' | null>(null)
+  const [busy, setBusy] = useState<'commit' | 'push' | 'discard' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   if (statusError) {
@@ -70,7 +74,7 @@ export function ChangesPanel({ root, status, loaded, statusError, refresh, selec
     return <p className="px-3 py-2 text-xs text-muted">Not a git repository.</p>
   }
 
-  const act = async (kind: 'commit' | 'push', fn: () => Promise<void>) => {
+  const act = async (kind: 'commit' | 'push' | 'discard', fn: () => Promise<void>) => {
     setBusy(kind)
     setError(null)
     try {
@@ -84,8 +88,19 @@ export function ChangesPanel({ root, status, loaded, statusError, refresh, selec
     }
   }
 
-  const canCommit = status.changes.length > 0 && message.trim() !== '' && busy === null
-  const commit = () => canCommit && act('commit', () => window.api.git.commit(root, message))
+  const checked = new Set(status.changes.map((c) => c.path).filter((p) => !unchecked.has(p)))
+  const partial = checked.size < status.changes.length
+  const canCommit = checked.size > 0 && message.trim() !== '' && busy === null
+  // With every file checked this is today's commit-all; otherwise only the checked files go in.
+  const commit = () =>
+    canCommit && act('commit', () => window.api.git.commit(root, message, partial ? commitPathspec(status.changes, checked) : undefined))
+  const discard = (change: FileChange) => {
+    const what =
+      change.kind === 'A'
+        ? `Move the new file ${change.path} to the Trash?`
+        : `Discard all changes to ${change.path}? They can't be recovered.`
+    if (confirm(what)) void act('discard', () => window.api.git.discard(root, change))
+  }
   // Pushing makes sense with unpushed commits, or to publish a branch that has no upstream.
   const canPush = status.remote && (status.ahead > 0 || !status.upstream) && busy === null
 
@@ -97,6 +112,16 @@ export function ChangesPanel({ root, status, loaded, statusError, refresh, selec
         </span>
         {status.ahead > 0 && <span title={`${status.ahead} commit(s) to push`}>↑{status.ahead}</span>}
         {status.behind > 0 && <span title={`${status.behind} commit(s) to pull`}>↓{status.behind}</span>}
+        {status.changes.length > 0 && (
+          <button
+            className="ml-auto shrink-0 rounded px-1.5 text-fg/85 hover:bg-raised hover:text-fg"
+            title="Every change in one scrolling view"
+            data-testid="review-all"
+            onClick={onReview}
+          >
+            Review all
+          </button>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -114,15 +139,41 @@ export function ChangesPanel({ root, status, loaded, statusError, refresh, selec
                 tabIndex={0}
                 data-testid="change-entry"
                 title={change.from ? `${change.from} → ${change.path}` : change.path}
-                className={`flex h-6 cursor-pointer items-center gap-2 px-3 text-[13px] ${
+                className={`group flex h-6 cursor-pointer items-center gap-2 pr-3 pl-2 text-[13px] ${
                   change.path === selected ? 'bg-raised text-fg' : 'text-fg/85 hover:bg-raised/60'
                 }`}
                 onClick={() => onSelect(change)}
                 onKeyDown={(e) => e.key === 'Enter' && onSelect(change)}
               >
+                <input
+                  type="checkbox"
+                  className="shrink-0 accent-accent"
+                  aria-label={`Include ${change.path} in the commit`}
+                  data-testid="change-check"
+                  checked={!unchecked.has(change.path)}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => onCheck(change.path, e.target.checked)}
+                />
                 <span className={`truncate ${change.kind === 'D' ? 'line-through' : ''}`}>{name}</span>
                 <span className="truncate text-[11px] text-muted">{dir}</span>
-                <span className={`ml-auto shrink-0 font-mono text-[11px] ${kind.className}`} title={kind.label}>
+                {change.kind !== 'C' && (
+                  <button
+                    className="ml-auto hidden shrink-0 rounded px-1 text-[11px] text-muted group-hover:block hover:text-danger"
+                    title={change.kind === 'A' ? 'Move the new file to the Trash' : 'Discard the changes to this file'}
+                    aria-label={`Discard ${change.path}`}
+                    data-testid="change-discard"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      discard(change)
+                    }}
+                  >
+                    ↺
+                  </button>
+                )}
+                <span
+                  className={`shrink-0 font-mono text-[11px] ${change.kind === 'C' ? 'ml-auto' : 'ml-auto group-hover:ml-0'} ${kind.className}`}
+                  title={kind.label}
+                >
                   {change.kind}
                 </span>
               </div>
@@ -149,11 +200,15 @@ export function ChangesPanel({ root, status, loaded, statusError, refresh, selec
         <div className="flex gap-2">
           <button
             className="flex-1 rounded-md bg-accent px-2 py-1 text-xs font-medium text-bg disabled:opacity-40"
-            title="Commit all changes (⌘↵)"
+            title="Commit the checked files (⌘↵)"
             disabled={!canCommit}
             onClick={() => void commit()}
           >
-            {busy === 'commit' ? 'Committing…' : `Commit${status.changes.length ? ` ${status.changes.length}` : ''}`}
+            {busy === 'commit'
+              ? 'Committing…'
+              : partial
+                ? `Commit ${checked.size} of ${status.changes.length}`
+                : `Commit${status.changes.length ? ` ${status.changes.length}` : ''}`}
           </button>
           <button
             className="rounded-md border border-line px-2.5 py-1 text-xs hover:bg-raised disabled:opacity-40 disabled:hover:bg-transparent"

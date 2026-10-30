@@ -1,6 +1,6 @@
 import type { FileEntry, ReadResult } from './files'
 import type { SearchQuery, SearchResult } from './search'
-import type { Commit, DiffSides, FileChange, GitStatus } from './git'
+import type { Commit, DiffSides, FileChange, GitStatus, LineStats } from './git'
 import type { AgentWorktree, AppState } from './types'
 import type { Provider } from './providers'
 
@@ -95,8 +95,12 @@ export interface SquadstormApi {
     commitDiff(root: string, hash: string, path: string, from?: string): Promise<DiffSides>
     /** `from` is the old path of a renamed file. */
     diff(root: string, path: string, from?: string): Promise<DiffSides>
-    /** Stages everything and commits it. */
-    commit(root: string, message: string): Promise<void>
+    /** Stages everything and commits it, or only `paths` when given. */
+    commit(root: string, message: string, paths?: string[]): Promise<void>
+    /** Lines added and removed per changed file. */
+    numstat(root: string): Promise<Record<string, LineStats>>
+    /** Throws away a file's uncommitted change (new files go to the Trash). */
+    discard(root: string, change: FileChange): Promise<void>
     /** Pushes the current branch, publishing it to origin if it has no upstream yet. */
     push(root: string): Promise<void>
   }

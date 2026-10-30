@@ -8,6 +8,7 @@ import { DiffView } from './DiffView'
 import { FileTree } from './FileTree'
 import { HistoryPanel } from './HistoryPanel'
 import { QuickOpen } from './QuickOpen'
+import { ReviewView } from './ReviewView'
 import { SearchPanel } from './SearchPanel'
 
 const basename = (path: string) => path.split('/').pop() ?? path
@@ -26,6 +27,10 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
   // With a commit it is that commit's change to the file, otherwise the uncommitted one.
   const [diff, setDiff] = useState<{ change: FileChange; commit?: Commit } | null>(null)
   const [searching, setSearching] = useState(false)
+  // The review of every change replaces the editor, like a diff does, until a file or tab is picked.
+  const [reviewing, setReviewing] = useState(false)
+  // Files left out of the next commit (kept here so the choice survives switching panels).
+  const [unchecked, setUnchecked] = useState<ReadonlySet<string>>(new Set())
   const git = useGitStatus(root, !hidden)
 
   // Once a change is committed or reverted, its diff has nothing left to show.
@@ -63,6 +68,7 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
 
   const open = (path: string, at?: TextMatch) => {
     setDiff(null)
+    setReviewing(false)
     setSearchSelected(at ? { path, match: at } : null)
     if (at) setReveal({ path, line: at.line, column: at.column, length: at.length })
     setTabs((t) => (t.includes(path) ? t : [...t, path]))
@@ -130,7 +136,7 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
             </div>
             {/* Both stay mounted so the tree keeps its expanded folders. */}
             <div className={side === 'files' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
-              <FileTree root={root} activePath={diff ? null : active} onOpen={open} />
+              <FileTree root={root} activePath={diff || reviewing ? null : active} onOpen={open} status={git.status} />
             </div>
             <div className={side === 'search' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
               <SearchPanel
@@ -149,7 +155,16 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
                 statusError={git.error}
                 refresh={git.refresh}
                 selected={diff && !diff.commit ? diff.change.path : null}
-                onSelect={(change) => setDiff({ change })}
+                onSelect={(change) => {
+                  setReviewing(false)
+                  setDiff({ change })
+                }}
+                unchecked={unchecked}
+                onCheck={(path, checked) => setUnchecked((u) => toggleIn(u, path, !checked))}
+                onReview={() => {
+                  setDiff(null)
+                  setReviewing(true)
+                }}
               />
             </div>
             <div className={side === 'history' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
@@ -158,7 +173,10 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
                 status={git.status}
                 visible={!hidden && side === 'history'}
                 selected={diff?.commit ? { hash: diff.commit.hash, path: diff.change.path } : null}
-                onSelect={(commit, change) => setDiff({ change, commit })}
+                onSelect={(commit, change) => {
+                  setReviewing(false)
+                  setDiff({ change, commit })
+                }}
               />
             </div>
           </div>
@@ -172,14 +190,15 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
                   <div
                     key={path}
                     role="tab"
-                    aria-selected={path === active && !diff}
+                    aria-selected={path === active && !diff && !reviewing}
                     title={path}
                     data-testid="editor-tab"
                     className={`group flex shrink-0 cursor-pointer items-center gap-1.5 border-r border-line pr-1.5 pl-3 ${
-                      path === active && !diff ? 'bg-bg text-fg' : 'text-muted hover:text-fg'
+                      path === active && !diff && !reviewing ? 'bg-bg text-fg' : 'text-muted hover:text-fg'
                     }`}
                     onClick={() => {
                       setDiff(null)
+                      setReviewing(false)
                       setActive(path)
                     }}
                     onAuxClick={(e) => e.button === 1 && close(path)}
@@ -210,12 +229,15 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
                           <span className="hidden group-hover:inline">✕</span>
                         </>
                       ) : (
-                        <span className={path === active && !diff ? '' : 'invisible group-hover:visible'}>✕</span>
+                        <span className={path === active && !diff && !reviewing ? '' : 'invisible group-hover:visible'}>✕</span>
                       )}
                     </button>
                   </div>
                 ))}
               </div>
+            )}
+            {reviewing && !diff && (
+              <ReviewView root={root} status={git.status} onOpenFile={open} onClose={() => setReviewing(false)} />
             )}
             {diff && (
               <DiffView
@@ -226,7 +248,7 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
                 onOpenFile={open}
               />
             )}
-            <div className={diff ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
+            <div className={diff || reviewing ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
               <CodeEditor
                 root={root}
                 tabs={tabs}

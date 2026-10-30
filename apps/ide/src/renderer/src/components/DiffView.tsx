@@ -2,10 +2,32 @@ import { useEffect, useRef, useState } from 'react'
 import { LanguageDescription } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import { unifiedMergeView } from '@codemirror/merge'
-import { EditorState } from '@codemirror/state'
+import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView, lineNumbers } from '@codemirror/view'
 import type { Commit, FileChange } from '@shared/git'
 import { editorTheme } from './CodeEditor'
+
+/** The read-only unified diff setup shared by the diff and review views. */
+export function diffExtensions(
+  original: string,
+  lang: Extension | null,
+  mergeControls: Parameters<typeof unifiedMergeView>[0]['mergeControls'] = false
+): Extension[] {
+  return [
+    lineNumbers(),
+    EditorState.readOnly.of(true),
+    EditorView.editable.of(false),
+    unifiedMergeView({ original, mergeControls, gutter: true }),
+    ...editorTheme,
+    lang ?? []
+  ]
+}
+
+/** The language support for a file name, if CodeMirror has one. */
+export const languageFor = (path: string) =>
+  LanguageDescription.matchFilename(languages, path.split('/').pop() ?? path)
+    ?.load()
+    .catch(() => null) ?? Promise.resolve(null)
 
 interface Props {
   root: string
@@ -32,8 +54,7 @@ export function DiffView({ root, change, commit, onOpenFile }: Props) {
         const { original, modified } = commit
           ? await window.api.git.commitDiff(root, commit.hash, change.path, change.from)
           : await window.api.git.diff(root, change.path, change.from)
-        const name = change.path.split('/').pop() ?? change.path
-        const lang = await LanguageDescription.matchFilename(languages, name)?.load().catch(() => null)
+        const lang = await languageFor(change.path)
         if (cancelled) return
         const scrollTop = view?.scrollDOM.scrollTop ?? 0
         view?.destroy()
@@ -41,14 +62,7 @@ export function DiffView({ root, change, commit, onOpenFile }: Props) {
           parent: hostRef.current!,
           state: EditorState.create({
             doc: modified,
-            extensions: [
-              lineNumbers(),
-              EditorState.readOnly.of(true),
-              EditorView.editable.of(false),
-              unifiedMergeView({ original, mergeControls: false, gutter: true }),
-              ...editorTheme,
-              lang ?? []
-            ]
+            extensions: diffExtensions(original, lang)
           })
         })
         view.scrollDOM.scrollTop = scrollTop
