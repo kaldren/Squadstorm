@@ -1,6 +1,6 @@
 # Spec: Link the code I'm reading and the agents
 
-From: intent/2026-10-30-agent-code-links/intent.md. Status: draft.
+From: intent/2026-10-30-agent-code-links/intent.md. Status: accepted.
 Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill.
 
 ## Requirements
@@ -56,9 +56,9 @@ Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill.
 
 ## Flagged concerns
 - [x] **Plain `path:lines` instead of Claude Code's `@path#L1-10`.** In the terminal, `@` starts each CLI's own file picker, and the two CLIs differ. A plain path works for both, and both read the file themselves. **Resolved 2026-10-30: plain, for both.**
-- [ ] **⌘-click to open links** (VS Code's terminal convention), instead of a plain click that fights with text selection. Proposed: ⌘-click.
-- [ ] **Paths printed relative to some other folder** (e.g. a monorepo package) don't match the agent's cwd and won't link. Proposed: accept. Only paths that resolve and exist become links.
-- [ ] **Terminals as receivers.** Plain Terminal tiles are listed too, after the agents (useful for pasting a path into a shell). Proposed: keep them.
+- [x] **⌘-click to open links** (VS Code's terminal convention), instead of a plain click that fights with text selection. Proposed: ⌘-click. **Resolved 2026-10-30: as proposed.**
+- [x] **Paths printed relative to some other folder** (e.g. a monorepo package) don't match the agent's cwd and won't link. Proposed: accept. Only paths that resolve and exist become links. **Resolved 2026-10-30: as proposed.**
+- [x] **Terminals as receivers.** Plain Terminal tiles are listed too, after the agents (useful for pasting a path into a shell). Proposed: keep them. **Resolved 2026-10-30: as proposed.**
 
 ## Risk
 Low to medium. Text only ever goes to a pty as paste. Links open only existing files inside the workspace and http(s) URLs. One new preload helper (`pathForFile`), and no new main-process powers beyond the existing `openExternal` handler.
