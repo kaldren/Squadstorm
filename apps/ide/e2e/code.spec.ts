@@ -107,7 +107,7 @@ test("code view: a save never overwrites an agent's change", async () => {
   await expect(diff).toContainText('agent line')
   await expect(diff).toContainText('// mine')
 
-  // Reload takes the disk version and the file is clean again.
+  // Reload takes the disk version and the file is clean again, with the editor still focused.
   await banner.getByRole('button', { name: 'Reload' }).click()
   await expect(banner).toBeHidden()
   await expect(diff).toBeHidden()
@@ -115,6 +115,21 @@ test("code view: a save never overwrites an agent's change", async () => {
   await expect(editor).not.toContainText('// mine')
   await expect(page.getByTestId('dirty-dot')).toHaveCount(0)
   await expect(page.getByTestId('conflict-dot')).toHaveCount(0)
+  await page.keyboard.type('// typed after reload')
+  await expect(editor).toContainText('// typed after reload')
+  await page.keyboard.press('Meta+s')
+  await expect.poll(disk).toContain('// typed after reload')
+
+  // An agent that puts the file back the way it was takes the conflict with it.
+  const before = disk()
+  await typeAtEnd('// mine too')
+  appendFileSync(file, 'passing agent line\n')
+  await expect(banner).toBeVisible()
+  writeFileSync(file, before)
+  await expect(banner).toBeHidden()
+  await expect(page.getByTestId('dirty-dot')).toHaveCount(1)
+  await page.keyboard.press('Meta+s')
+  await expect.poll(disk).toContain('// mine too')
 
   // Keep mine: the banner goes, the file stays dirty, and the next save writes my version on purpose.
   await typeAtEnd('// mine again')
