@@ -107,7 +107,11 @@ function createWindow(): void {
 
   // Links printed by agents (auth URLs, docs) open in the real browser, never inside the app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) shell.openExternal(url)
+    if (/^https?:\/\//.test(url)) {
+      // e2e tests check what would have opened instead of launching a browser.
+      if (process.env.SQUADSTORM_E2E) ((globalThis as any).__squadstormOpened ??= []).push(url)
+      else void shell.openExternal(url)
+    }
     return { action: 'deny' }
   })
 

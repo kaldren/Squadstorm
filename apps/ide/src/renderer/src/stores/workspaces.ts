@@ -12,6 +12,27 @@ export interface NewWorkspace {
   isolate?: boolean
 }
 
+/** A file to show in the Code view of the folder `root` (a workspace or an agent's worktree). */
+export interface OpenRequest {
+  root: string
+  path: string
+  /** 1-based. */
+  line?: number
+  column?: number
+}
+
+/** Code to send to an agent: a file, or lines of it, from the Code view of `root`. */
+export interface SendRequest {
+  root: string
+  path: string
+  from?: number
+  to?: number
+}
+
+/** The workspace whose folder, or one of whose agents' worktrees, is `root`. */
+export const workspaceOf = (workspaces: Workspace[], root: string) =>
+  workspaces.find((w) => w.path === root || w.agents.some((a) => a.worktree?.path === root))
+
 /** What a workspace's main area shows: the agent grid, or the files to edit by hand. */
 export type View = 'agents' | 'code'
 
@@ -24,6 +45,10 @@ interface WorkspacesStore extends AppState {
   pendingWorktrees: ReadonlySet<string>
   setupOpen: boolean
   availability: ProviderAvailability | null
+  openRequest: OpenRequest | null
+  sendRequest: SendRequest | null
+  requestOpen(request: OpenRequest | null): void
+  requestSend(request: SendRequest | null): void
   init(): Promise<void>
   openSetup(): void
   closeSetup(): void
@@ -152,6 +177,10 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
     pendingWorktrees: new Set(),
     setupOpen: false,
     availability: null,
+    openRequest: null,
+    sendRequest: null,
+    requestOpen: (request) => set({ openRequest: request }),
+    requestSend: (request) => set({ sendRequest: request }),
 
     async init() {
       const [state, availability] = await Promise.all([

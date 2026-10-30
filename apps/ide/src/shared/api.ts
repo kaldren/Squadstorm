@@ -63,6 +63,8 @@ export interface SquadstormApi {
     save(state: AppState): Promise<void>
   }
   pickFolder(): Promise<string | null>
+  /** Absolute path of a file dropped from Finder ('' for files that aren't on disk). */
+  pathForFile(file: File): string
   /** Absolute path of each provider's CLI, or null when it is not on PATH. */
   providers(): Promise<ProviderAvailability>
   github: {

@@ -6,6 +6,8 @@ interface AttentionStore {
   agents: Record<string, AgentAttention>
   /** An agent whose tile should take keyboard focus, e.g. after its notification was clicked. */
   focusRequest: string | null
+  /** The tile that had keyboard focus last: the default receiver of code sent to an agent. */
+  lastFocused: string | null
   report(agentId: string, state: AgentAttention): void
   remove(agentId: string): void
   requestFocus(agentId: string | null): void
@@ -14,6 +16,7 @@ interface AttentionStore {
 export const useAttention = create<AttentionStore>((set, get) => ({
   agents: {},
   focusRequest: null,
+  lastFocused: null,
   report: (agentId, state) => set({ agents: { ...get().agents, [agentId]: state } }),
   remove(agentId) {
     const { [agentId]: _gone, ...rest } = get().agents

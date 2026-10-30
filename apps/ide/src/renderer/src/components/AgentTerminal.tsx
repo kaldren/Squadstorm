@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type IDisposable, type ILink } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { ActivityTracker, type Activity } from '@shared/activity'
 import { nextWaiting } from '@shared/attention'
+import { bracketedPaste, findPathLinks, findUrlLinks, quotePath } from '@shared/links'
 import { PROVIDERS } from '@shared/providers'
 import type { AgentConfig } from '@shared/types'
 import { attachPty } from '../ptyBus'
@@ -222,6 +223,8 @@ export function AgentTerminal({
     }
     void start()
 
+    const links = registerLinks(term, agent.id, cwd)
+
     const input = term.onData((data) => {
       tracker.input(Date.now())
       window.api.pty.write(agent.id, data)
@@ -244,6 +247,7 @@ export function AgentTerminal({
       resize.dispose()
       bell.dispose()
       osc.dispose()
+      links.dispose()
       useAttention.getState().remove(agent.id)
       written.dispose()
       bufferChange.dispose()
@@ -278,11 +282,18 @@ export function AgentTerminal({
       data-focused={focused || undefined}
       onFocus={() => {
         setFocused(true)
+        useAttention.setState({ lastFocused: agent.id })
         evaluateRef.current()
       }}
       onBlur={() => setFocused(false)}
       onMouseDown={() => termRef.current?.focus()}
       onDragOver={(e) => {
+        // Files from Finder: their paths go into the prompt.
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'copy'
+          return
+        }
         if (!reorder?.onDragOver()) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'move'
@@ -291,6 +302,13 @@ export function AgentTerminal({
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) reorder?.onDragLeave()
       }}
       onDrop={(e) => {
+        if (e.dataTransfer.files.length > 0) {
+          e.preventDefault()
+          const paths = [...e.dataTransfer.files].map((f) => window.api.pathForFile(f)).filter(Boolean)
+          if (paths.length > 0) window.api.pty.write(agent.id, bracketedPaste(`${paths.map(quotePath).join(' ')} `))
+          termRef.current?.focus()
+          return
+        }
         if (!reorder) return
         e.preventDefault()
         reorder.onDrop()
@@ -364,6 +382,77 @@ export function AgentTerminal({
       </div>
     </div>
   )
+}
+
+/**
+ * Makes ⌘-click open relative file paths printed by the agent (when they exist under its folder) in
+ * the Code view, at their line, and http(s) URLs in the browser.
+ */
+function registerLinks(term: Terminal, agentId: string, cwd: string): IDisposable {
+  // Paths become links only when they exist: checked against the folder's file list, kept fresh.
+  let files: Set<string> | null = null
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const load = () =>
+    window.api.files.all(cwd).then(
+      (all) => void (files = new Set(all)),
+      () => {}
+    )
+  void load()
+  const offChanged = window.api.files.onChanged((root) => {
+    if (root !== cwd) return
+    clearTimeout(timer)
+    timer = setTimeout(load, 500)
+  })
+
+  const lineText = (y: number) => term.buffer.active.getLine(y - 1)?.translateToString(true) ?? ''
+  const range = (y: number, start: number, end: number) => ({ start: { x: start + 1, y }, end: { x: end, y } })
+  const withMeta = (event: MouseEvent, open: () => void) => event.metaKey && open()
+
+  const provideLinks = (y: number): ILink[] => {
+    const text = lineText(y)
+    const paths = findPathLinks(text)
+      .filter((l) => files?.has(l.path))
+      .map(
+        (l): ILink => ({
+          range: range(y, l.start, l.end),
+          text: text.slice(l.start, l.end),
+          decorations: { pointerCursor: true, underline: true },
+          activate: (event) =>
+            withMeta(event, () => useWorkspaces.getState().requestOpen({ root: cwd, path: l.path, line: l.line, column: l.column }))
+        })
+      )
+    const urls = findUrlLinks(text).map(
+      (l): ILink => ({
+        range: range(y, l.start, l.end),
+        text: l.url,
+        decorations: { pointerCursor: true, underline: true },
+        // The window-open handler in main sends http(s) to the browser and opens nothing in the app.
+        activate: (event) => withMeta(event, () => window.open(l.url))
+      })
+    )
+    return [...paths, ...urls]
+  }
+
+  const provider = term.registerLinkProvider({ provideLinks: (y, callback) => callback(provideLinks(y)) })
+
+  // Terminal text is drawn on a canvas, so e2e tests reach the links of a line through this hook.
+  const hooks = (((window as unknown as Record<string, unknown>).__squadstormLinks ??= {}) as Record<string, unknown>)
+  hooks[agentId] = {
+    ready: () => files !== null,
+    find: (text: string) => {
+      for (let y = 1; y <= term.buffer.active.length; y++) if (lineText(y).includes(text)) return provideLinks(y)
+      return []
+    }
+  }
+
+  return {
+    dispose() {
+      clearTimeout(timer)
+      offChanged()
+      provider.dispose()
+      delete hooks[agentId]
+    }
+  }
 }
 
 const ipcMessage = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import type { SquadstormApi } from '@shared/api'
 
 function subscribe<T>(channel: string, listener: (id: string, payload: T) => void): () => void {
@@ -13,6 +13,7 @@ const api: SquadstormApi = {
     save: (state) => ipcRenderer.invoke('state:save', state)
   },
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
+  pathForFile: (file) => webUtils.getPathForFile(file),
   providers: () => ipcRenderer.invoke('providers:list'),
   github: {
     status: () => ipcRenderer.invoke('github:status'),

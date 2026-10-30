@@ -68,3 +68,10 @@ Step 4: link detection on every rendered line. The providers only run for the ho
 - All → `pnpm typecheck && pnpm test && pnpm test:e2e` output in the PR
 
 ## Deviations
+- 2026-10-30 — The link test hook (`window.__squadstormLinks`) is installed always, not only under `SQUADSTORM_E2E`: the renderer can't see that variable, and the hook only exposes the tile's own link providers to renderer code.
+- 2026-10-30 — Links are underlined whenever hovered (xterm's link decoration), not only while ⌘ is held; they still only open with ⌘.
+- 2026-10-30 — Diff and review editors are now read-only but focusable (`EditorView.editable` is no longer turned off), so text can be selected there and sent with ⌘L.
+- 2026-10-30 — Deleted files in Changes have no send button (there's no file to point at).
+- 2026-10-30 — The ⌘L keymap lives in `src/renderer/src/sendKeymap.ts`, shared by the editor and diffs.
+- 2026-10-30 — The send button on file rows is an icon (`SendIcon.tsx`), not a "→" character: text in the row broke `code.spec.ts`'s check of the tree's entries, and the row's text should stay the file name.
+

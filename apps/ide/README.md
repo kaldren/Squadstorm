@@ -57,6 +57,9 @@ Press **⌘E** to switch between your agents and a full editor:
 
 <img src="docs/screenshots/code.png" alt="The code view with the file tree and editor" />
 
+### 🔗 Code ⇄ agents
+Select some lines and press **⌘L** (or use **→** on a file in the tree or in Changes) to drop a reference like `src/a.ts:2-3` into an agent's prompt, with an optional note. It's pasted, not submitted, unless you send with **⌘↵**. The other way round, **⌘-click** a file path in an agent's output to open it at that line, or a URL to open it in your browser. Drag files or screenshots from Finder onto a tile to paste their paths.
+
 ### 🔎 Quick Open and project search
 **⌘P** fuzzy-finds any file. **⇧⌘F** searches the whole project, with match-case, whole-word, regex and include/exclude filters.
 
@@ -111,6 +114,8 @@ pnpm dist          # from apps/ide: builds Squadstorm.app into apps/ide/dist/
 | **⌘P** | Quick Open a file |
 | **⇧⌘F** | Search the project |
 | **⌘S** | Save the current file |
+| **⌘L** | Send the selection (or file) to an agent |
+| **⌘-click** | Open a path or URL printed by an agent |
 | **⌘↵** | Commit (in the Changes panel) |
 
 ## Under the hood

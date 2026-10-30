@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { parentDir, type FileEntry } from '@shared/files'
 import type { ChangeKind, GitStatus } from '@shared/git'
+import { SendIcon } from './SendIcon'
 
 interface Props {
   root: string
@@ -8,6 +9,8 @@ interface Props {
   onOpen(path: string): void
   /** Marks changed files, and the folders that contain them. */
   status?: GitStatus
+  /** Sends a file to an agent (hover button on file rows). */
+  onSend?(path: string): void
 }
 
 /** `a/b/c.ts` → `['a', 'a/b']`. */
@@ -24,7 +27,7 @@ const KIND_COLOR: Record<ChangeKind, string> = {
   C: 'text-danger'
 }
 
-export function FileTree({ root, activePath, onOpen, status }: Props) {
+export function FileTree({ root, activePath, onOpen, status, onSend }: Props) {
   const kinds = new Map(status?.changes.map((c) => [c.path, c.kind]))
   const changedDirs = new Set(status?.changes.flatMap((c) => ancestors(c.path)))
   // Listings keyed by directory ('' is the root); only directories that were opened are loaded.
@@ -88,7 +91,7 @@ export function FileTree({ root, activePath, onOpen, status }: Props) {
             data-testid="file-entry"
             data-git={kind ?? (changed ? 'changed' : undefined)}
             title={entry.path}
-            className={`flex h-6 cursor-pointer items-center gap-1 truncate pr-2 text-[13px] ${
+            className={`group flex h-6 cursor-pointer items-center gap-1 truncate pr-2 text-[13px] ${
               entry.path === activePath ? 'bg-raised text-fg' : 'text-fg/85 hover:bg-raised/60'
             }`}
             style={{ paddingLeft: 8 + depth * 12 }}
@@ -99,6 +102,20 @@ export function FileTree({ root, activePath, onOpen, status }: Props) {
             </span>
             <span className={`truncate ${kind ? KIND_COLOR[kind] : ''}`}>{entry.name}</span>
             {changed && <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/80" title="Contains changes" />}
+            {onSend && !entry.dir && (
+              <button
+                className={`hidden shrink-0 rounded px-1 text-[11px] text-muted group-hover:block hover:text-fg ${kind ? '' : 'ml-auto'}`}
+                title="Send to an agent"
+                aria-label={`Send ${entry.path} to an agent`}
+                data-testid="send-file"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSend(entry.path)
+                }}
+              >
+                <SendIcon />
+              </button>
+            )}
             {kind && <span className={`ml-auto shrink-0 font-mono text-[10px] ${KIND_COLOR[kind]}`}>{kind}</span>}
           </div>
           {entry.dir && expanded.has(entry.path) && renderDir(entry.path, depth + 1)}
