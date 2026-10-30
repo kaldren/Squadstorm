@@ -32,6 +32,7 @@ export function WorkspaceSidebar() {
               key={w.id}
               role="button"
               tabIndex={0}
+              aria-current={w.id === activeWorkspaceId || undefined}
               className={`group mb-0.5 flex cursor-pointer flex-col gap-1 rounded-md px-2.5 py-2 ${
                 w.id === activeWorkspaceId ? 'bg-raised' : 'hover:bg-raised/60'
               }`}

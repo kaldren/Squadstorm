@@ -205,6 +205,7 @@ export function AgentTerminal({
       // Each (re)start begins a fresh online window.
       tracker = new ActivityTracker(Date.now())
       prev = 'online'
+      useAttention.getState().report(agent.id, { activity: prev, waiting: isWaiting })
       attached = true
       setStatus('running')
     }
