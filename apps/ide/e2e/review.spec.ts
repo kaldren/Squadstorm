@@ -147,3 +147,102 @@ test('tree marks changes', async () => {
   await expect(entry('src/a.ts')).toHaveAttribute('data-git', 'M')
   await s.app.close()
 })
+
+/** A fresh repo with `files` committed, then `changes` applied (null deletes). */
+function repoWith(files: Record<string, string>, changes: Record<string, string | null>): string {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-review-')))
+  git(dir, 'init', '-q', '-b', 'main')
+  git(dir, 'config', 'user.email', 'e2e@example.com')
+  git(dir, 'config', 'user.name', 'E2E')
+  const put = (path: string, content: string) => {
+    mkdirSync(join(dir, path, '..'), { recursive: true })
+    writeFileSync(join(dir, path), content)
+  }
+  for (const [path, content] of Object.entries(files)) put(path, content)
+  git(dir, 'add', '-A')
+  git(dir, 'commit', '-q', '-m', 'init')
+  for (const [path, content] of Object.entries(changes)) {
+    if (content === null) rmSync(join(dir, path))
+    else put(path, content)
+  }
+  return dir
+}
+
+async function openRepo(dir: string): Promise<Session> {
+  const app = await electron.launch({
+    args: ['.'],
+    env: { ...process.env, SQUADSTORM_E2E: '1', SQUADSTORM_USER_DATA: mkdtempSync(join(tmpdir(), 'squadstorm-e2e-data-')), SQUADSTORM_AGENT_CMD: 'exec cat' }
+  })
+  await app.evaluate(({ dialog }, folder) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] })
+  }, dir)
+  const page = await app.firstWindow()
+  const session: Session = { app, page, dir, answers: [] }
+  page.on('dialog', (d) => void (session.answers.shift() === false ? d.dismiss() : d.accept()))
+  await page.getByTestId('pick-folder').click()
+  await page.getByTestId('start').click()
+  await page.getByRole('tab', { name: 'Code' }).click()
+  await page.getByRole('tab', { name: 'changes' }).click()
+  await page.getByTestId('review-all').click()
+  return session
+}
+
+test("a hunk discard or its undo never overwrites a newer change", async () => {
+  const dir = repoWith({ 'a.ts': lines(20) }, { 'a.ts': lines(20, { 2: 'agent change one', 15: 'agent change two' }) })
+  const s = await openRepo(dir)
+  const hunks = section(s, 'a.ts').getByTestId('discard-hunk')
+  await expect(hunks).toHaveCount(2)
+
+  // The agent appends a line; the review hasn't caught up yet when Discard is clicked.
+  writeFileSync(join(dir, 'a.ts'), lines(20, { 2: 'agent change one', 15: 'agent change two' }) + 'agent appended\n')
+  await hunks.first().click()
+  await s.page.waitForTimeout(800)
+  expect(read(s, 'a.ts')).toContain('agent appended')
+
+  // Undo after the agent edited the file again doesn't bring back the old text either.
+  await expect(section(s, 'a.ts')).toContainText('agent appended')
+  await section(s, 'a.ts').getByTestId('discard-hunk').first().click()
+  await expect.poll(() => read(s, 'a.ts')).not.toContain('agent change one')
+  writeFileSync(join(dir, 'a.ts'), read(s, 'a.ts') + 'agent again\n')
+  await s.page.getByTestId('undo-discard').click()
+  await s.page.waitForTimeout(500)
+  expect(read(s, 'a.ts')).toContain('agent again')
+  expect(read(s, 'a.ts')).not.toContain('agent change one')
+  await s.app.close()
+})
+
+test('discarding a hunk keeps the line endings and leaves look-alike paths alone', async () => {
+  const crlf = (text: string) => text.replace(/\n/g, '\r\n')
+  const dir = repoWith(
+    { 'win.ts': crlf(lines(20)), 'app/[id]/page.ts': 'a\n', 'app/i/page.ts': 'b\n', 'app/d/page.ts': 'c\n' },
+    {
+      'win.ts': crlf(lines(20, { 2: 'agent change one', 15: 'agent change two' })),
+      'app/[id]/page.ts': 'a changed\n',
+      'app/i/page.ts': 'b changed\n',
+      'empty.ts': ''
+    }
+  )
+  const s = await openRepo(dir)
+  await section(s, 'win.ts').getByTestId('discard-hunk').first().click()
+  await expect.poll(() => read(s, 'win.ts')).toBe(crlf(lines(20, { 15: 'agent change two' })))
+
+  // `[id]` is a glob to git unless paths are taken literally.
+  await section(s, 'app/[id]/page.ts').getByTestId('discard-file').click()
+  await expect.poll(() => read(s, 'app/[id]/page.ts')).toBe('a\n')
+  expect(read(s, 'app/i/page.ts')).toBe('b changed\n')
+
+  // An empty new file adds no lines.
+  await expect(section(s, 'empty.ts').getByTestId('review-stats')).toHaveText('+0 −0')
+  await s.app.close()
+})
+
+test('committing a file whose name looks like a pattern commits only that file', async () => {
+  const dir = repoWith({ 'app/[id]/page.ts': 'a\n', 'app/i/page.ts': 'b\n' }, { 'app/[id]/page.ts': 'a changed\n', 'app/i/page.ts': 'b changed\n' })
+  const s = await openRepo(dir)
+  await s.page.getByTestId('change-entry').filter({ hasText: 'i' }).filter({ hasNotText: '[id]' }).getByTestId('change-check').uncheck()
+  await s.page.getByLabel('Commit message').fill('Only [id]')
+  await s.page.getByRole('button', { name: 'Commit 1 of 2' }).click()
+  await expect.poll(() => git(dir, 'log', '-1', '--format=%s').trim()).toBe('Only [id]')
+  expect(git(dir, 'show', '--name-only', '--format=', 'HEAD').trim()).toBe('app/[id]/page.ts')
+  await s.app.close()
+})
