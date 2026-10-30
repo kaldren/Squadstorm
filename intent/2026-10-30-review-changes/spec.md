@@ -1,6 +1,6 @@
 # Spec: Review an agent's changes in one place and keep or discard them
 
-From: intent/2026-10-30-review-changes/intent.md. Status: draft.
+From: intent/2026-10-30-review-changes/intent.md. Status: accepted.
 Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill.
 Depends on: agent-worktrees (per-agent scope, R5). Everything else stands on its own.
 
@@ -65,9 +65,9 @@ Depends on: agent-worktrees (per-agent scope, R5). Everything else stands on its
 
 ## Flagged concerns
 - [x] **Hunk discard has no confirmation and no undo.** Proposed: no confirmation (it's a deliberate click on one hunk). Instead, show a toast "Discarded 1 change in foo.ts" with **Undo**, which writes back the previous content, for 10 s. **Resolved 2026-10-30: discard at once, with the Undo toast.**
-- [ ] **Staging partial hunks** for commit (intent out of scope) stays out. Commit selection is per file.
-- [ ] **Where Review lives.** Proposed: the editor area, opened from the Changes panel (keeps the panel as the list, like VS Code's multi-diff editor). Alternative: a third top-level view next to Agents/Code.
-- [ ] **New files go to the Trash, but discarded edits to tracked files can't be recovered.** Proposed: accept, behind the confirmation.
+- [x] **Staging partial hunks** for commit (intent out of scope) stays out. Commit selection is per file. **Resolved 2026-10-30: as proposed.**
+- [x] **Where Review lives.** Proposed: the editor area, opened from the Changes panel (keeps the panel as the list, like VS Code's multi-diff editor). Alternative: a third top-level view next to Agents/Code. **Resolved 2026-10-30: as proposed.**
+- [x] **New files go to the Trash, but discarded edits to tracked files can't be recovered.** Proposed: accept, behind the confirmation. **Resolved 2026-10-30: as proposed.**
 
 ## Risk
 Medium. Discard and selective commit change the user's files and history. Mitigations:
