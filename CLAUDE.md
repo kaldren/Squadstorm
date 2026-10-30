@@ -1,0 +1,3 @@
+# Squadstorm
+
+@AGENTS.md
