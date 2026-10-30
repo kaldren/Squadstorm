@@ -74,4 +74,16 @@ Step 7, removal, because it deletes folders and branches. Removal only ever call
 - 2026-10-30 — Menu results and errors show as a small popover under the `⋯` button rather than a line under the header, so the terminal doesn't shift.
 - 2026-10-30 — AC5 and AC8 are checked inside `› isolated agents work in their own worktrees` instead of a separate test; it already has the worktree they need.
 - 2026-10-30 — A removed agent's label is reused for the next agent when no agent of that provider is left (today's `nextAgentLabel` behaviour), so branch names can repeat a label. The random suffix keeps them unique.
+- 2026-10-30 — `parseWorktreeList` was dropped: nothing needed it once removal relies on `git worktree remove` and `git branch -d` themselves. AC9 is covered by the naming and path tests.
+- 2026-10-30 — A removed agent's pty is killed *before* its worktree is removed (planned: after), so the agent can't keep writing into a folder being deleted. If git then refuses, the tile stays with an exited session that Restart brings back.
+- 2026-10-30 — From review, failing tests first:
+  - a conflicting merge is detected by the `MERGE_HEAD` it leaves behind (git prints conflicts on stdout, so matching the error text never worked) and aborted;
+  - when git refuses to remove a worktree (the repo folder is gone, submodules, …) you can remove the agent from Squadstorm anyway, leaving the folder and branch;
+  - each agent is released on its own, so one failure no longer leaves others half-removed, and a closed workspace keeps only the agents it couldn't release;
+  - worktrees finished after their agent or workspace went away are removed;
+  - repos without commits don't offer worktrees (Setup, header toggle, and main refuses);
+  - the header toggle can always be turned off;
+  - Setup forgets the previous folder's git check while checking a new one;
+  - a failure in the provisioning queue no longer stalls the agents after it.
+- 2026-10-30 — Not done (review nits, accepted): `git worktree remove` without `--force` still deletes ignored files the agent created (`.env.local`, build output) without asking; after **Open PR** sets an upstream, `git branch -d` compares with the upstream, so removing the agent can delete a pushed-but-unmerged local branch (the commits stay on origin); a worktree whose folder vanished shows the tile as exited rather than with a reason; quitting while a worktree is being created can leave that worktree behind.
 

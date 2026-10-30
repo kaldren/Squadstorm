@@ -15,11 +15,21 @@ function useIsolationBlocker(path: string): string | null {
   const [blocker, setBlocker] = useState<string | null>('Checking git…')
   useEffect(() => {
     let live = true
-    const check = () =>
-      window.api.git.status(path).then(
-        (s) => live && setBlocker(!s.repo ? 'Not a git repository' : !s.branch ? 'Detached HEAD: check out a branch' : null),
-        () => live && setBlocker('Could not read git status')
-      )
+    const check = async () => {
+      try {
+        const [status, log] = await Promise.all([window.api.git.status(path), window.api.git.log(path)])
+        const reason = !status.repo
+          ? 'Not a git repository'
+          : !status.branch
+            ? 'Detached HEAD: check out a branch'
+            : log.length === 0
+              ? 'No commits yet: commit something first'
+              : null
+        if (live) setBlocker(reason)
+      } catch {
+        if (live) setBlocker('Could not read git status')
+      }
+    }
     void check()
     window.addEventListener('focus', check)
     return () => {
@@ -75,7 +85,8 @@ export function WorkspaceView({ workspace, hidden }: { workspace: Workspace; hid
                 data-testid="isolate-toggle"
                 className="accent-accent"
                 checked={!!workspace.isolate}
-                disabled={isolationBlocker !== null}
+                // Turning it off always works, even when it couldn't be turned on now.
+                disabled={isolationBlocker !== null && !workspace.isolate}
                 onChange={(e) => setIsolate(workspace.id, e.target.checked)}
               />
               Own worktree

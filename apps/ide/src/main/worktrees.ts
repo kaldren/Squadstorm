@@ -41,11 +41,18 @@ async function aheadOfBase(root: string, wt: AgentWorktree): Promise<number | nu
   }
 }
 
+const hasCommits = (root: string) =>
+  git(root, ['rev-parse', '--verify', '--quiet', 'HEAD']).then(
+    () => true,
+    () => false
+  )
+
 /** A new worktree on a new branch, from the workspace's current branch and commit. */
 export async function addWorktree(root: string, label: string): Promise<AgentWorktree> {
   const { repo, branch: base } = await gitStatus(root)
   if (!repo) throw new Error('This folder is not a git repository.')
   if (!base) throw new Error('The workspace is on a detached HEAD. Check out a branch first.')
+  if (!(await hasCommits(root))) throw new Error('The repository has no commits yet. Commit something first.')
   const branch = branchName(label, randomBytes(2).toString('hex'))
   const path = worktreeDir(baseDir(), root, branch)
   await mkdir(dirname(path), { recursive: true })
@@ -98,8 +105,13 @@ export async function mergeWorktree(root: string, wt: AgentWorktree): Promise<{ 
   try {
     await git(root, ['merge', '--no-ff', '--no-edit', wt.branch])
   } catch (e) {
-    const message = (e as Error).message
-    if (!/CONFLICT/.test(message)) throw e
+    // git reports conflicts on stdout (and in the user's language), so look for the merge it left
+    // half done rather than at the message.
+    const inProgress = await git(root, ['rev-parse', '--verify', '--quiet', 'MERGE_HEAD']).then(
+      () => true,
+      () => false
+    )
+    if (!inProgress) throw e
     await git(root, ['merge', '--abort']).catch(() => {})
     throw new Error(`Merging would conflict with ${wt.base}. Ask the agent to merge ${wt.base} into its branch first.`)
   }

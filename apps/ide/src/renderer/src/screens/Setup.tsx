@@ -22,13 +22,14 @@ export function Setup() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [isolate, setIsolate] = useState(false)
-  // Worktrees need git: offered for clones, and for folders that are git repos on a branch.
+  // Worktrees need git: offered for clones, and for folders that are git repos on a branch with commits.
   const [folderIsRepo, setFolderIsRepo] = useState(false)
   useEffect(() => {
-    if (!path) return setFolderIsRepo(false)
+    setFolderIsRepo(false)
+    if (!path) return
     let live = true
-    window.api.git.status(path).then(
-      (s) => live && setFolderIsRepo(s.repo && s.branch !== null),
+    Promise.all([window.api.git.status(path), window.api.git.log(path)]).then(
+      ([s, log]) => live && setFolderIsRepo(s.repo && s.branch !== null && log.length > 0),
       () => live && setFolderIsRepo(false)
     )
     return () => {

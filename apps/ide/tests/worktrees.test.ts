@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { branchName, parseWorktreeList, prCommands, slug, worktreeDir } from '../src/shared/worktrees'
+import { branchName, prCommands, slug, worktreeDir } from '../src/shared/worktrees'
 
 describe('branch names', () => {
   it('slugs the agent label and adds the suffix', () => {
@@ -23,30 +23,6 @@ describe('worktreeDir', () => {
     const b = worktreeDir('/w', '/two/app', 'squadstorm/x-1')
     expect(a).not.toBe(b)
     expect(worktreeDir('/w', '/one/app', 'squadstorm/x-1')).toBe(a)
-  })
-})
-
-describe('parseWorktreeList', () => {
-  it('reads paths and branches, including detached worktrees', () => {
-    const out = [
-      'worktree /code/app',
-      'HEAD 1111111111111111111111111111111111111111',
-      'branch refs/heads/main',
-      '',
-      'worktree /w/app-123456/claude-1-abcd',
-      'HEAD 2222222222222222222222222222222222222222',
-      'branch refs/heads/squadstorm/claude-1-abcd',
-      '',
-      'worktree /w/app-123456/detached',
-      'HEAD 3333333333333333333333333333333333333333',
-      'detached',
-      ''
-    ].join('\n')
-    expect(parseWorktreeList(out)).toEqual([
-      { path: '/code/app', branch: 'main' },
-      { path: '/w/app-123456/claude-1-abcd', branch: 'squadstorm/claude-1-abcd' },
-      { path: '/w/app-123456/detached', branch: null }
-    ])
   })
 })
 

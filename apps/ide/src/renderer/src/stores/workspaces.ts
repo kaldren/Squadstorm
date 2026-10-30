@@ -56,33 +56,47 @@ const isolates = (workspace: Workspace, provider: Provider) => !!workspace.isola
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
+const ipcMessage = (e: unknown) =>
+  (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+
 /**
- * Removes the worktrees of agents that are going away. Asks before discarding uncommitted changes and
- * reports branches kept because they hold commits of their own. Resolves false when the user said no
- * (or something failed), in which case nothing was removed.
+ * Removes the worktrees of agents that are going away and resolves to the ids of those that may go:
+ * agents without a worktree, agents whose worktree was removed, and agents the user chose to drop
+ * although git refused to remove their worktree (its folder and branch then stay on disk). Asks once
+ * before discarding uncommitted changes; declining keeps every agent. Reports kept branches.
  */
-async function releaseWorktrees(root: string, agents: AgentConfig[]): Promise<boolean> {
+async function releaseWorktrees(root: string, agents: AgentConfig[]): Promise<Set<string>> {
+  const released = new Set(agents.filter((a) => !a.worktree).map((a) => a.id))
   const isolated = agents.filter((a) => a.worktree)
-  if (isolated.length === 0) return true
-  try {
-    const states = await Promise.all(isolated.map((a) => window.api.worktrees.inspect(root, a.worktree!)))
-    const dirty = isolated.filter((_, i) => states[i].changes > 0)
-    if (dirty.length > 0) {
-      const what = dirty.map((a) => `${a.label} (${plural(states[isolated.indexOf(a)].changes, 'change')})`).join(', ')
-      if (!confirm(`Discard uncommitted changes in the worktree of ${what}? This can't be undone.`)) return false
-    }
-    const kept: string[] = []
-    for (const [i, agent] of isolated.entries()) {
-      window.api.pty.kill(agent.id)
-      const { branchKept } = await window.api.worktrees.remove(root, agent.worktree!, states[i].changes > 0)
-      if (branchKept) kept.push(agent.worktree!.branch)
-    }
-    if (kept.length > 0) alert(`Kept ${kept.join(', ')}: ${kept.length === 1 ? 'it has' : 'they have'} commits that aren't merged yet.`)
-    return true
-  } catch (e) {
-    alert(`Could not remove the worktree: ${(e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`)
-    return false
+  if (isolated.length === 0) return released
+  // A worktree that can't be inspected (its repo is gone, say) counts as clean; removing it decides.
+  const changes = await Promise.all(
+    isolated.map((a) => window.api.worktrees.inspect(root, a.worktree!).then((s) => s.changes, () => 0))
+  )
+  const dirty = isolated.filter((_, i) => changes[i] > 0)
+  if (dirty.length > 0) {
+    const what = dirty.map((a) => `${a.label} (${plural(changes[isolated.indexOf(a)], 'change')})`).join(', ')
+    if (!confirm(`Discard uncommitted changes in the worktree of ${what}? This can't be undone.`)) return new Set()
   }
+  const kept: string[] = []
+  for (const [i, agent] of isolated.entries()) {
+    const wt = agent.worktree!
+    // Stop the agent first so it can't keep writing into the folder being removed.
+    window.api.pty.kill(agent.id)
+    try {
+      const { branchKept } = await window.api.worktrees.remove(root, wt, changes[i] > 0)
+      if (branchKept) kept.push(wt.branch)
+      released.add(agent.id)
+    } catch (e) {
+      const dropAnyway = confirm(
+        `Could not remove the worktree of ${agent.label}: ${ipcMessage(e)}\n\n` +
+          `Remove it from Squadstorm anyway? Its folder (${wt.path}) and branch ${wt.branch} stay on disk.`
+      )
+      if (dropAnyway) released.add(agent.id)
+    }
+  }
+  if (kept.length > 0) alert(`Kept ${kept.join(', ')}: ${kept.length === 1 ? 'it has' : 'they have'} commits that aren't merged yet.`)
+  return released
 }
 
 export const useWorkspaces = create<WorkspacesStore>((set, get) => {
@@ -96,26 +110,37 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
     set({ pendingWorktrees: next })
   }
 
+  const agentExists = (workspaceId: string, agentId: string) =>
+    !!get().workspaces.find((w) => w.id === workspaceId)?.agents.some((a) => a.id === agentId)
+
   /** Creates the worktrees of pending agents one at a time (git locks its worktree list). */
   let queue = Promise.resolve()
   const provision = (workspaceId: string, agentId: string) => {
     setPending(agentId, true)
-    queue = queue.then(async () => {
-      const workspace = get().workspaces.find((w) => w.id === workspaceId)
-      const agent = workspace?.agents.find((a) => a.id === agentId)
-      if (!workspace || !agent) return setPending(agentId, false)
-      try {
-        const worktree = await window.api.worktrees.add(workspace.path, agent.label)
-        updateWorkspace(workspaceId, (w) => ({
-          ...w,
-          agents: w.agents.map((a) => (a.id === agentId ? { ...a, worktree } : a))
-        }))
-      } catch (e) {
-        updateWorkspace(workspaceId, (w) => ({ ...w, agents: w.agents.filter((a) => a.id !== agentId) }))
-        alert(`Could not create a worktree for ${agent.label}: ${(e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`)
-      }
-      setPending(agentId, false)
-    })
+    queue = queue
+      .then(async () => {
+        const workspace = get().workspaces.find((w) => w.id === workspaceId)
+        const agent = workspace?.agents.find((a) => a.id === agentId)
+        if (!workspace || !agent) return
+        try {
+          const worktree = await window.api.worktrees.add(workspace.path, agent.label)
+          // The agent or its workspace went away meanwhile: don't leave the new worktree behind.
+          if (!agentExists(workspaceId, agentId)) {
+            await window.api.worktrees.remove(workspace.path, worktree, false).catch(() => {})
+            return
+          }
+          updateWorkspace(workspaceId, (w) => ({
+            ...w,
+            agents: w.agents.map((a) => (a.id === agentId ? { ...a, worktree } : a))
+          }))
+        } catch (e) {
+          updateWorkspace(workspaceId, (w) => ({ ...w, agents: w.agents.filter((a) => a.id !== agentId) }))
+          alert(`Could not create a worktree for ${agent.label}: ${ipcMessage(e)}`)
+        }
+      })
+      // One failure must never stall the agents queued after it.
+      .catch(() => {})
+      .finally(() => setPending(agentId, false))
   }
 
   return {
@@ -167,7 +192,13 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
     async removeWorkspace(id) {
       const target = get().workspaces.find((w) => w.id === id)
       if (!target) return true
-      if (!(await releaseWorktrees(target.path, target.agents))) return false
+      const released = await releaseWorktrees(target.path, target.agents)
+      if (released.size < target.agents.length) {
+        // Some agents stay: the workspace stays too, minus the agents whose worktrees are gone.
+        const gone = (a: AgentConfig) => !!a.worktree && released.has(a.id)
+        updateWorkspace(id, (w) => ({ ...w, agents: w.agents.filter((a) => !gone(a)) }))
+        return false
+      }
       target.agents.forEach((a) => window.api.pty.kill(a.id))
       const workspaces = get().workspaces.filter((w) => w.id !== id)
       const activeWorkspaceId =
@@ -198,7 +229,7 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
       const workspace = get().workspaces.find((w) => w.id === workspaceId)
       const agent = workspace?.agents.find((a) => a.id === agentId)
       if (!workspace || !agent) return
-      if (!(await releaseWorktrees(workspace.path, [agent]))) return
+      if (!(await releaseWorktrees(workspace.path, [agent])).has(agentId)) return
       window.api.pty.kill(agentId)
       updateWorkspace(workspaceId, (w) => ({
         ...w,

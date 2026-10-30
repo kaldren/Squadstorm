@@ -31,25 +31,6 @@ export function worktreeDir(base: string, workspacePath: string, branch: string)
   return `${base.replace(/\/+$/, '')}/${slug(repo)}-${shortHash(workspacePath)}/${branch.replace(/^squadstorm\//, '')}`
 }
 
-export interface WorktreeEntry {
-  path: string
-  /** Short branch name, or null for a detached HEAD. */
-  branch: string | null
-}
-
-/** Parses `git worktree list --porcelain`. */
-export function parseWorktreeList(out: string): WorktreeEntry[] {
-  return out
-    .split(/\n\n+/)
-    .map((block) => {
-      const lines = block.split('\n')
-      const path = lines.find((l) => l.startsWith('worktree '))?.slice('worktree '.length)
-      const ref = lines.find((l) => l.startsWith('branch '))?.slice('branch '.length)
-      return path ? { path, branch: ref ? ref.replace(/^refs\/heads\//, '') : null } : null
-    })
-    .filter((e): e is WorktreeEntry => e !== null)
-}
-
 /** The git and gh arguments that publish an agent's branch and open a PR for it. */
 export function prCommands(wt: AgentWorktree): { push: string[]; pr: string[] } {
   return {
