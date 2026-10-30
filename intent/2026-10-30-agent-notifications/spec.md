@@ -1,6 +1,6 @@
 # Spec: Know when an agent needs you
 
-From: intent/2026-10-30-agent-notifications/intent.md. Status: draft.
+From: intent/2026-10-30-agent-notifications/intent.md. Status: accepted.
 Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill.
 
 ## Requirements
@@ -44,10 +44,10 @@ Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill.
 - Sidebar workspace entry: next to "N agents", `2 working · 1 waiting` when non-zero.
 
 ## Flagged concerns
-- [ ] OS notifications only while the window is unfocused (VS Code's default). When the window is focused but the agent is in another workspace, you get the sidebar count and tile highlight, not a macOS banner. Accept, or also notify in that case?
-- [ ] "Finished" and "waiting for input" can't be told apart from terminal traffic, so both show as **waiting**. The OSC 9 text, when the CLI sends it, says which. Accept the single state?
-- [ ] Activity is inferred: a long silent step (e.g. a slow test run with no output) looks like "stopped working" after 3 s of quiet and raises a false waiting. Proposed: accept for now; tune `QUIET_MS` later if it's noisy. The notification only fires while you're away from the window, which limits the noise.
-- [ ] Claude Code and Codex may not emit bells or OSC 9 by default in an unknown terminal. The activity transition is the primary signal; bell/OSC 9 are a bonus. No CLI config is written (constraint).
+- [x] OS notifications only while the window is unfocused (VS Code's default). When the window is focused but the agent is in another workspace, you get the sidebar count and tile highlight, not a macOS banner. **Resolved 2026-10-30: unfocused only.**
+- [x] "Finished" and "waiting for input" can't be told apart from terminal traffic, so both show as **waiting**. The OSC 9 text, when the CLI sends it, says which. **Resolved: single state.**
+- [x] Activity is inferred: a long silent step (e.g. a slow test run with no output) looks like "stopped working" after 3 s of quiet and raises a false waiting. Proposed: accept for now; tune `QUIET_MS` later if it's noisy. The notification only fires while you're away from the window, which limits the noise. **Resolved: accepted.**
+- [x] Claude Code and Codex may not emit bells or OSC 9 by default in an unknown terminal. The activity transition is the primary signal; bell/OSC 9 are a bonus. No CLI config is written (constraint). **Resolved: as proposed.**
 
 ## Risk
 Medium. Touches the tile, the sidebar, a new store and two IPC channels. Failure modes are noisy or missing notifications, not lost work. The macOS notification permission prompt appears the first time a notification is shown, for packaged builds. No migrations; nothing stored on disk.

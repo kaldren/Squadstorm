@@ -1,6 +1,6 @@
 # Spec: Unsaved edits silently overwrite agent changes
 
-From: intent/2026-10-30-save-conflicts/intent.md. Status: draft.
+From: intent/2026-10-30-save-conflicts/intent.md. Status: accepted.
 Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill.
 
 ## Requirements
@@ -44,9 +44,9 @@ All changes are in the renderer; no new IPC. `files.read` and `files.write` are 
 **CodeView**: no change required; the dirty dot keeps coming from `onDirty`.
 
 ## Flagged concerns
-- [ ] Banner only on the active tab. Background tabs with a conflict don't show anything until opened. Constraint: "I'm told right away." Proposed: also mark the tab (a warning-colored dot instead of the dirty dot). This adds a callback from CodeEditor to CodeView; small. Accept, or keep banner-only for now?
-- [ ] Reading every open buffer on each change batch. Agents can rewrite many files at once. Proposed: only read files that are open (already the case: the handler loops over changed paths and skips paths without a buffer). Files over 2 MB already can't be opened, so reads stay bounded. No action needed unless you disagree.
-- [ ] A tiny race remains between the re-read in `save()` and the write. An agent writing in those few milliseconds can still be overwritten. Closing it fully needs an atomic compare-and-write in the main process (new IPC). Proposed: accept the race for now; the watcher plus the save check cover the realistic cases.
+- [x] Banner only on the active tab. Background tabs with a conflict don't show anything until opened. Constraint: "I'm told right away." Proposed: also mark the tab (a warning-colored dot instead of the dirty dot). This adds a callback from CodeEditor to CodeView; small. **Resolved 2026-10-30: mark the tab too.**
+- [x] Reading every open buffer on each change batch. Agents can rewrite many files at once. Proposed: only read files that are open (already the case: the handler loops over changed paths and skips paths without a buffer). Files over 2 MB already can't be opened, so reads stay bounded. **Resolved: as proposed.**
+- [x] A tiny race remains between the re-read in `save()` and the write. An agent writing in those few milliseconds can still be overwritten. Closing it fully needs an atomic compare-and-write in the main process (new IPC). Proposed: accept the race for now; the watcher plus the save check cover the realistic cases. **Resolved: accepted.**
 
 ## Risk
 Small. Renderer-only, one component plus a pure helper. Worst case is an extra banner or a missed reload, not data loss: the save path only becomes more conservative. No migrations, no external services.
