@@ -8,6 +8,7 @@ import { PROVIDERS } from '@shared/providers'
 import type { AgentConfig } from '@shared/types'
 import { attachPty } from '../ptyBus'
 import { useAttention } from '../stores/attention'
+import { useWorkspaces } from '../stores/workspaces'
 
 type Status = 'starting' | 'running' | 'exited' | 'error'
 
@@ -32,6 +33,9 @@ export interface ReorderHandlers {
 interface Props {
   agent: AgentConfig
   cwd: string
+  workspaceId: string
+  /** The workspace folder: where an isolated agent's branch merges back. */
+  workspacePath: string
   /** Named in notifications. */
   workspaceName: string
   maximized: boolean
@@ -46,6 +50,8 @@ interface Props {
 export function AgentTerminal({
   agent,
   cwd,
+  workspaceId,
+  workspacePath,
   workspaceName,
   maximized,
   hidden,
@@ -312,6 +318,11 @@ export function AgentTerminal({
       >
         <span className="h-2 w-2 rounded-full" style={{ background: provider.color }} />
         <span className="font-medium">{agent.label}</span>
+        {agent.worktree && (
+          <span className="truncate font-mono text-[11px] text-muted" title={agent.worktree.path} data-testid="agent-branch">
+            {agent.worktree.branch}
+          </span>
+        )}
         {status !== 'running' ? (
           <StatusPill status={status} />
         ) : waiting ? (
@@ -320,6 +331,9 @@ export function AgentTerminal({
           <ActivityPill activity={activity} />
         )}
         <div className="ml-auto flex items-center gap-1">
+          {agent.worktree && (
+            <WorktreeMenu workspaceId={workspaceId} workspacePath={workspacePath} worktree={agent.worktree} label={agent.label} />
+          )}
           {(status === 'exited' || status === 'error') && (
             <button
               className="rounded px-2 py-0.5 text-muted hover:bg-raised hover:text-fg"
@@ -348,6 +362,127 @@ export function AgentTerminal({
       <div className="min-h-0 flex-1 pt-1.5 pl-2">
         <div ref={hostRef} className="h-full w-full" data-testid="agent-terminal" />
       </div>
+    </div>
+  )
+}
+
+const ipcMessage = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+
+/** The ⋯ menu of an isolated agent: bring its work back, or look at it. */
+function WorktreeMenu({
+  workspaceId,
+  workspacePath,
+  worktree,
+  label
+}: {
+  workspaceId: string
+  workspacePath: string
+  worktree: NonNullable<AgentConfig['worktree']>
+  label: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', close, true)
+    return () => window.removeEventListener('mousedown', close, true)
+  }, [open])
+
+  useEffect(() => {
+    if (!message) return
+    const timer = setTimeout(() => setMessage(null), 6000)
+    return () => clearTimeout(timer)
+  }, [message])
+
+  const act = async (fn: () => Promise<string>) => {
+    setOpen(false)
+    setBusy(true)
+    try {
+      setMessage({ text: await fn(), error: false })
+    } catch (e) {
+      setMessage({ text: ipcMessage(e), error: true })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const items: { label: string; testId: string; run(): void }[] = [
+    {
+      label: `Merge into ${worktree.base}`,
+      testId: 'agent-merge',
+      run: () =>
+        void act(async () => {
+          const { commits } = await window.api.worktrees.merge(workspacePath, worktree)
+          return `Merged ${commits} commit${commits === 1 ? '' : 's'} from ${label} into ${worktree.base}.`
+        })
+    },
+    {
+      label: 'Open PR',
+      testId: 'agent-pr',
+      run: () => void act(async () => `Opened ${await window.api.worktrees.openPr(workspacePath, worktree)}`)
+    },
+    {
+      label: 'Show code',
+      testId: 'agent-show-code',
+      run: () => {
+        setOpen(false)
+        const { setCodeScope, setView } = useWorkspaces.getState()
+        setCodeScope(workspaceId, worktree.path)
+        setView(workspaceId, 'code')
+      }
+    },
+    {
+      label: 'Copy worktree path',
+      testId: 'agent-copy-path',
+      run: () => void act(async () => (await navigator.clipboard.writeText(worktree.path), `Copied ${worktree.path}`))
+    }
+  ]
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        className="flex h-5 w-6 items-center justify-center rounded text-muted hover:bg-raised hover:text-fg disabled:opacity-40"
+        title="Worktree actions"
+        aria-label={`Worktree actions for ${label}`}
+        aria-expanded={open}
+        disabled={busy}
+        data-testid="agent-menu"
+        onClick={() => setOpen((o) => !o)}
+      >
+        {busy ? '…' : '⋯'}
+      </button>
+      {open && (
+        <div role="menu" className="absolute top-6 right-0 z-30 w-48 rounded-md border border-line bg-panel py-1 shadow-xl">
+          {items.map((item) => (
+            <button
+              key={item.testId}
+              role="menuitem"
+              data-testid={item.testId}
+              className="block w-full px-3 py-1 text-left text-xs hover:bg-raised"
+              onClick={item.run}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {message && (
+        <div
+          role="status"
+          data-testid="agent-message"
+          className={`absolute top-6 right-0 z-30 w-72 rounded-md border border-line bg-panel px-3 py-2 text-[11px] shadow-xl select-text ${
+            message.error ? 'text-danger' : 'text-fg'
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
     </div>
   )
 }

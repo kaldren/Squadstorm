@@ -37,6 +37,9 @@ Start any mix of **Claude**, **Codex** and plain **Terminal** tiles. The grid la
 
 <img src="docs/screenshots/focus.png" alt="One agent maximized to full screen" />
 
+### 🌳 A worktree per agent
+Turn on **Own worktree** (or tick it in setup) and every new agent works in its own git worktree, on its own `squadstorm/…` branch, in a folder outside your repo. Agents on separate tasks can't overwrite each other's files or break each other's builds. Each tile shows its branch; its **⋯** menu merges the agent's commits into your branch, opens a PR for them, or shows its code in the Code view. Removing the agent removes its worktree, asking first if that would discard uncommitted work, and keeps any branch that still has unmerged commits.
+
 ### 🗂️ Workspaces that come back
 Each project is a workspace in the sidebar, with its own squad. Quit and reopen the app: your workspaces, agents and grid order are all restored, with fresh sessions.
 

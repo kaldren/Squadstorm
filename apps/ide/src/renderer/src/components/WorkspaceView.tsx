@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { PROVIDERS, PROVIDER_IDS } from '@shared/providers'
 import type { Workspace } from '@shared/types'
 import { useWorkspaces, type View } from '../stores/workspaces'
@@ -10,14 +10,48 @@ const VIEWS: { id: View; label: string }[] = [
   { id: 'code', label: 'Code' }
 ]
 
+/** Why new agents can't get their own worktree here, or null when they can. */
+function useIsolationBlocker(path: string): string | null {
+  const [blocker, setBlocker] = useState<string | null>('Checking git…')
+  useEffect(() => {
+    let live = true
+    const check = () =>
+      window.api.git.status(path).then(
+        (s) => live && setBlocker(!s.repo ? 'Not a git repository' : !s.branch ? 'Detached HEAD: check out a branch' : null),
+        () => live && setBlocker('Could not read git status')
+      )
+    void check()
+    window.addEventListener('focus', check)
+    return () => {
+      live = false
+      window.removeEventListener('focus', check)
+    }
+  }, [path])
+  return blocker
+}
+
 export function WorkspaceView({ workspace, hidden }: { workspace: Workspace; hidden: boolean }) {
   const addAgent = useWorkspaces((s) => s.addAgent)
+  const setIsolate = useWorkspaces((s) => s.setIsolate)
   const availability = useWorkspaces((s) => s.availability)
   const view = useWorkspaces((s) => s.views[workspace.id] ?? 'agents')
   const setView = useWorkspaces((s) => s.setView)
-  // The code view mounts on first use, then stays mounted so open files and edits survive switching.
-  const [codeOpened, setCodeOpened] = useState(false)
-  if (view === 'code' && !codeOpened) setCodeOpened(true)
+  const setCodeScope = useWorkspaces((s) => s.setCodeScope)
+  const isolationBlocker = useIsolationBlocker(workspace.path)
+
+  // The Code view shows the workspace or one isolated agent's worktree.
+  const scopes = [
+    { root: workspace.path, label: 'Workspace' },
+    ...workspace.agents.flatMap((a) => (a.worktree ? [{ root: a.worktree.path, label: `${a.label} · ${a.worktree.branch}` }] : []))
+  ]
+  const requested = useWorkspaces((s) => s.codeScope[workspace.id])
+  const scope = scopes.some((s) => s.root === requested) ? requested! : workspace.path
+
+  // Each scope's code view mounts on first use, then stays mounted so open files and edits survive
+  // switching; one whose agent is gone unmounts.
+  const [opened, setOpened] = useState<string[]>([])
+  if (view === 'code' && !opened.includes(scope)) setOpened([...opened, scope])
+  const mounted = opened.filter((root) => scopes.some((s) => s.root === root))
 
   return (
     // Hidden, not unmounted: background workspaces keep their terminals attached.
@@ -28,6 +62,25 @@ export function WorkspaceView({ workspace, hidden }: { workspace: Workspace; hid
           {workspace.path}
         </span>
         <div className="no-drag ml-auto flex items-center gap-2">
+          {view === 'agents' && (
+            <label
+              className={`flex items-center gap-1.5 text-xs ${isolationBlocker ? 'text-muted/60' : 'text-muted hover:text-fg'}`}
+              title={
+                isolationBlocker ??
+                'New agents get their own git worktree and branch, so parallel tasks never touch each other. Terminals stay in the workspace folder.'
+              }
+            >
+              <input
+                type="checkbox"
+                data-testid="isolate-toggle"
+                className="accent-accent"
+                checked={!!workspace.isolate}
+                disabled={isolationBlocker !== null}
+                onChange={(e) => setIsolate(workspace.id, e.target.checked)}
+              />
+              Own worktree
+            </label>
+          )}
           {view === 'agents' &&
             PROVIDER_IDS.map((p) => (
               <button
@@ -40,6 +93,21 @@ export function WorkspaceView({ workspace, hidden }: { workspace: Workspace; hid
                 {PROVIDERS[p].label}
               </button>
             ))}
+          {view === 'code' && scopes.length > 1 && (
+            <select
+              data-testid="code-scope"
+              aria-label="Show code of"
+              className="max-w-64 rounded-md border border-line bg-panel px-1.5 py-1 text-xs text-fg"
+              value={scope}
+              onChange={(e) => setCodeScope(workspace.id, e.target.value)}
+            >
+              {scopes.map((s) => (
+                <option key={s.root} value={s.root}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          )}
           <div className="flex rounded-md border border-line bg-panel p-0.5 text-xs" role="tablist" title="Switch view (⌘E)">
             {VIEWS.map((v) => (
               <button
@@ -56,7 +124,9 @@ export function WorkspaceView({ workspace, hidden }: { workspace: Workspace; hid
         </div>
       </header>
       <AgentGrid workspace={workspace} hidden={view !== 'agents'} />
-      {codeOpened && <CodeView root={workspace.path} hidden={view !== 'code'} />}
+      {mounted.map((root) => (
+        <CodeView key={root} root={root} hidden={view !== 'code' || root !== scope} />
+      ))}
     </div>
   )
 }

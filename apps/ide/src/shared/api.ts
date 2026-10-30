@@ -1,7 +1,7 @@
 import type { FileEntry, ReadResult } from './files'
 import type { SearchQuery, SearchResult } from './search'
 import type { Commit, DiffSides, FileChange, GitStatus } from './git'
-import type { AppState } from './types'
+import type { AgentWorktree, AppState } from './types'
 import type { Provider } from './providers'
 
 export interface SpawnRequest {
@@ -39,6 +39,15 @@ export interface CloneResult {
   path: string
   /** True when an earlier clone was reused instead of cloning again. */
   reused: boolean
+}
+
+/** What removing an agent's worktree would lose. */
+export interface WorktreeState {
+  exists: boolean
+  /** Uncommitted changes in the worktree. */
+  changes: number
+  /** Commits on its branch that the base lacks; null when the base is gone. */
+  ahead: number | null
 }
 
 /** A macOS notification for an agent that needs you. */
@@ -90,6 +99,16 @@ export interface SquadstormApi {
     commit(root: string, message: string): Promise<void>
     /** Pushes the current branch, publishing it to origin if it has no upstream yet. */
     push(root: string): Promise<void>
+  }
+  /** Agent worktrees; `root` is always the workspace folder. */
+  worktrees: {
+    add(root: string, label: string): Promise<AgentWorktree>
+    inspect(root: string, worktree: AgentWorktree): Promise<WorktreeState>
+    /** `force` discards uncommitted changes. */
+    remove(root: string, worktree: AgentWorktree, force: boolean): Promise<{ branchKept: boolean }>
+    merge(root: string, worktree: AgentWorktree): Promise<{ commits: number }>
+    /** Resolves to the PR's URL. */
+    openPr(root: string, worktree: AgentWorktree): Promise<string>
   }
   attention: {
     /** Shows a macOS notification; clicking it brings the window forward and reports `onClicked`. */

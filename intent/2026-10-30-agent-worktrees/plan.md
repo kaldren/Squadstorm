@@ -70,3 +70,8 @@ Step 7, removal, because it deletes folders and branches. Removal only ever call
 - All → `pnpm typecheck && pnpm test && pnpm test:e2e` output in the PR
 
 ## Deviations
+- 2026-10-30 — Main validates every worktree record it gets from the renderer (`checked()` in `src/main/worktrees.ts`): the path must be inside the worktrees folder, the branch must be `squadstorm/<slug>`, and the base must not look like an option. A bad record can never remove or merge something else. Not in the plan; added for safety.
+- 2026-10-30 — Menu results and errors show as a small popover under the `⋯` button rather than a line under the header, so the terminal doesn't shift.
+- 2026-10-30 — AC5 and AC8 are checked inside `› isolated agents work in their own worktrees` instead of a separate test; it already has the worktree they need.
+- 2026-10-30 — A removed agent's label is reused for the next agent when no agent of that provider is left (today's `nextAgentLabel` behaviour), so branch names can repeat a label. The random suffix keeps them unique.
+

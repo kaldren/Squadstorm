@@ -4,7 +4,7 @@ import { resolveInside } from './files'
 import { gitEnv, run } from './github'
 import { resolveCommand } from './shell-env'
 
-async function git(root: string, args: string[]): Promise<string> {
+export async function git(root: string, args: string[]): Promise<string> {
   const env = await gitEnv()
   const file = resolveCommand('git', env.PATH ?? '') ?? 'git'
   return run(file, args, env, root)

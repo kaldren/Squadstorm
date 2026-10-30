@@ -43,6 +43,13 @@ const api: SquadstormApi = {
     commit: (root, message) => ipcRenderer.invoke('git:commit', root, message),
     push: (root) => ipcRenderer.invoke('git:push', root)
   },
+  worktrees: {
+    add: (root, label) => ipcRenderer.invoke('worktrees:add', root, label),
+    inspect: (root, worktree) => ipcRenderer.invoke('worktrees:inspect', root, worktree),
+    remove: (root, worktree, force) => ipcRenderer.invoke('worktrees:remove', root, worktree, force),
+    merge: (root, worktree) => ipcRenderer.invoke('worktrees:merge', root, worktree),
+    openPr: (root, worktree) => ipcRenderer.invoke('worktrees:openPr', root, worktree)
+  },
   attention: {
     notify: (notice) => ipcRenderer.send('attention:notify', notice),
     badge: (count) => ipcRenderer.send('attention:badge', count),

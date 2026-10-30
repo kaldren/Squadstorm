@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron'
 import { join } from 'node:path'
 import type { AttentionNotice, SpawnRequest } from '@shared/api'
+import type { AgentWorktree } from '@shared/types'
 import type { SearchQuery } from '@shared/search'
 import type { AppState } from '@shared/types'
 import { FileWatchers, listDir, readText, writeText } from './files'
@@ -8,6 +9,7 @@ import { gitCommit, gitCommitDiff, gitCommitFiles, gitDiff, gitLog, gitPush, git
 import { cloneRepo, githubStatus, listRepos } from './github'
 import { PtyManager } from './pty'
 import { allFiles, searchWorkspace } from './search'
+import { addWorktree, inspectWorktree, mergeWorktree, openWorktreePr, removeWorktree } from './worktrees'
 import { migrateFromOldNames } from './migrate'
 import { loadState, saveState } from './store'
 
@@ -166,6 +168,14 @@ function registerIpc(): void {
   ipcMain.handle('git:diff', (_e, root: string, path: string, from?: string) => gitDiff(root, path, from))
   ipcMain.handle('git:commit', (_e, root: string, message: string) => gitCommit(root, message))
   ipcMain.handle('git:push', (_e, root: string) => gitPush(root))
+
+  ipcMain.handle('worktrees:add', (_e, root: string, label: string) => addWorktree(root, label))
+  ipcMain.handle('worktrees:inspect', (_e, root: string, wt: AgentWorktree) => inspectWorktree(root, wt))
+  ipcMain.handle('worktrees:remove', (_e, root: string, wt: AgentWorktree, force: boolean) =>
+    removeWorktree(root, wt, force === true)
+  )
+  ipcMain.handle('worktrees:merge', (_e, root: string, wt: AgentWorktree) => mergeWorktree(root, wt))
+  ipcMain.handle('worktrees:openPr', (_e, root: string, wt: AgentWorktree) => openWorktreePr(root, wt))
 
   ipcMain.on('attention:notify', (_e, notice: AttentionNotice) => notify(notice))
   ipcMain.on('attention:badge', (_e, count: unknown) => setBadge(count))
