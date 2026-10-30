@@ -87,6 +87,13 @@ export function AgentTerminal({
     }
     fitIfVisible()
 
+    // xterm only shows its scrollbar on hover; flag the host so CSS keeps it up whenever there is scrollback.
+    const markScrollback = () => {
+      host.toggleAttribute('data-scrollback', term.buffer.active.baseY > 0)
+    }
+    const written = term.onWriteParsed(markScrollback)
+    const bufferChange = term.buffer.onBufferChange(markScrollback)
+
     // Until spawn resolves, live output is already contained in the returned backlog.
     let attached = false
     let tracker = new ActivityTracker(Date.now())
@@ -126,6 +133,7 @@ export function AgentTerminal({
     }
     startRef.current = () => {
       term.reset()
+      markScrollback()
       void start()
     }
     void start()
@@ -137,6 +145,7 @@ export function AgentTerminal({
     const resize = term.onResize(({ cols, rows }) => {
       tracker.input(Date.now())
       window.api.pty.resize(agent.id, cols, rows)
+      markScrollback()
     })
     // Activity also changes on its own as time passes, so poll rather than only reacting to output.
     const activityTimer = setInterval(() => setActivity(tracker.status(Date.now())), 500)
@@ -149,6 +158,8 @@ export function AgentTerminal({
       clearInterval(activityTimer)
       input.dispose()
       resize.dispose()
+      written.dispose()
+      bufferChange.dispose()
       detach()
       term.dispose()
       termRef.current = null
@@ -233,7 +244,7 @@ export function AgentTerminal({
       </div>
       {/* Padding lives on a wrapper: on .xterm itself it exposes the native scrollbar track. */}
       <div className="min-h-0 flex-1 pt-1.5 pl-2">
-        <div ref={hostRef} className="h-full w-full" />
+        <div ref={hostRef} className="h-full w-full" data-testid="agent-terminal" />
       </div>
     </div>
   )

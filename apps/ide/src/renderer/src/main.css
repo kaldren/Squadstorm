@@ -46,6 +46,13 @@ body {
 .xterm-viewport {
   background-color: transparent !important;
 }
+/* Keep the scrollbar visible while there is scrollback, not only on hover (AgentTerminal sets data-scrollback).
+   visibility undoes Tailwind's .invisible, which xterm's hidden scrollbar also carries. */
+[data-scrollback] .xterm-scrollable-element > .scrollbar.vertical {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
 
 /* The app shell disables selection; the editor needs it back. */
 .cm-editor {

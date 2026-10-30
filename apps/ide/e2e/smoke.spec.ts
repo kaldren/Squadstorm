@@ -53,6 +53,17 @@ test('setup → agent grid → add/remove → restored on relaunch', async () =>
   await expect.poll(() => output(app, tiles.nth(1))).toContain('hello agent two')
   expect(await output(app, tiles.nth(0))).not.toContain('hello agent two')
 
+  // Once output overflows, the terminal scrollbar stays visible without hovering.
+  const slider = tiles.nth(1).locator('.xterm-scrollable-element > .scrollbar.vertical > .slider')
+  await expect(tiles.nth(1).getByTestId('agent-terminal')).not.toHaveAttribute('data-scrollback')
+  for (let i = 0; i < 60; i++) await page.keyboard.type(`line ${i}\r`)
+  await expect(tiles.nth(1).getByTestId('agent-terminal')).toHaveAttribute('data-scrollback')
+  await page.mouse.move(0, 0)
+  await page.waitForTimeout(1500) // past xterm's hover fade-out
+  await expect(slider).toBeVisible()
+  await expect(slider.locator('..')).toHaveCSS('opacity', '1')
+  await expect(tiles.nth(0).getByTestId('agent-terminal')).not.toHaveAttribute('data-scrollback')
+
   await page.screenshot({ path: 'test-results/grid.png' })
 
   // Three tiles: two on top, the third stretches across the bottom row.
