@@ -3,9 +3,11 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { ActivityTracker, type Activity } from '@shared/activity'
+import { nextWaiting } from '@shared/attention'
 import { PROVIDERS } from '@shared/providers'
 import type { AgentConfig } from '@shared/types'
 import { attachPty } from '../ptyBus'
+import { useAttention } from '../stores/attention'
 
 type Status = 'starting' | 'running' | 'exited' | 'error'
 
@@ -30,6 +32,8 @@ export interface ReorderHandlers {
 interface Props {
   agent: AgentConfig
   cwd: string
+  /** Named in notifications. */
+  workspaceName: string
   maximized: boolean
   hidden: boolean
   onMaximize(): void
@@ -42,6 +46,7 @@ interface Props {
 export function AgentTerminal({
   agent,
   cwd,
+  workspaceName,
   maximized,
   hidden,
   onMaximize,
@@ -51,11 +56,19 @@ export function AgentTerminal({
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   const startRef = useRef<() => void>(() => {})
+  /** Re-reads activity and waiting now instead of at the next poll (e.g. when the tile gets focus). */
+  const evaluateRef = useRef<() => void>(() => {})
   const [status, setStatus] = useState<Status>('starting')
   const [activity, setActivity] = useState<Activity>('online')
+  const [waiting, setWaiting] = useState(false)
   const [focused, setFocused] = useState(false)
   const provider = PROVIDERS[agent.provider]
+  // Notification text uses the latest names without restarting the terminal.
+  const namesRef = useRef({ label: agent.label, workspaceName })
+  namesRef.current = { label: agent.label, workspaceName }
+  const focusRequest = useAttention((s) => s.focusRequest)
 
   useEffect(() => {
     const host = hostRef.current!
@@ -97,6 +110,64 @@ export function AgentTerminal({
     // Until spawn resolves, live output is already contained in the returned backlog.
     let attached = false
     let tracker = new ActivityTracker(Date.now())
+
+    // You're looking at an agent when the window has focus and so does its tile, which also means
+    // its workspace, view and tile are on screen.
+    const seen = () => document.hasFocus() && !!rootRef.current?.contains(document.activeElement)
+    let prev: Activity = 'online'
+    let isWaiting = false
+    /** Set by a bell or OSC 9 notification, consumed by the next evaluation. */
+    let signal: { kind: 'bell' | 'osc'; text?: string } | null = null
+    /** True while the backlog of a running session is replayed into a fresh terminal. */
+    let replaying = false
+
+    const evaluate = () => {
+      const now = Date.now()
+      const next = tracker.status(now)
+      const asked = signal
+      signal = null
+      const nextIsWaiting = nextWaiting({
+        shell: !!provider.shell,
+        prev,
+        activity: next,
+        signal: asked?.kind ?? null,
+        replaying,
+        seen: seen(),
+        waiting: isWaiting
+      })
+      // macOS notifications only while you're away from the window; in it, the tile and sidebar show it.
+      if (nextIsWaiting && !isWaiting && !document.hasFocus()) {
+        const { label, workspaceName: workspace } = namesRef.current
+        window.api.attention.notify({
+          agentId: agent.id,
+          title: `${label} in ${workspace}`,
+          body: asked?.text || 'Finished, or waiting for your input.'
+        })
+      }
+      if (next !== prev || nextIsWaiting !== isWaiting) {
+        useAttention.getState().report(agent.id, { activity: next, waiting: nextIsWaiting })
+      }
+      prev = next
+      isWaiting = nextIsWaiting
+      setActivity(next)
+      setWaiting(nextIsWaiting)
+    }
+    evaluateRef.current = evaluate
+
+    const bell = term.onBell(() => {
+      if (replaying) return
+      signal = { kind: 'bell' }
+      evaluate()
+    })
+    // OSC 9 is iTerm2's "post a notification". ConEmu's OSC 9;<n>;… subcommands (progress bars and
+    // such) reuse the number and are not requests for attention.
+    const osc = term.parser.registerOscHandler(9, (text) => {
+      if (!replaying && !/^\d+;/.test(text)) {
+        signal = { kind: 'osc', text }
+        evaluate()
+      }
+      return true
+    })
     const detach = attachPty(
       agent.id,
       (data) => {
@@ -125,9 +196,15 @@ export function AgentTerminal({
         term.write(`\x1b[31m${result.error}\x1b[0m\r\n`)
         return
       }
-      if (result.backlog) term.write(result.backlog)
+      if (result.backlog) {
+        replaying = true
+        term.write(result.backlog, () => {
+          replaying = false
+        })
+      }
       // Each (re)start begins a fresh online window.
       tracker = new ActivityTracker(Date.now())
+      prev = 'online'
       attached = true
       setStatus('running')
     }
@@ -148,7 +225,7 @@ export function AgentTerminal({
       markScrollback()
     })
     // Activity also changes on its own as time passes, so poll rather than only reacting to output.
-    const activityTimer = setInterval(() => setActivity(tracker.status(Date.now())), 500)
+    const activityTimer = setInterval(evaluate, 500)
     // Fires on grid reflow, sidebar drags, and when a hidden workspace becomes visible again.
     const observer = new ResizeObserver(() => fitIfVisible())
     observer.observe(host)
@@ -158,26 +235,44 @@ export function AgentTerminal({
       clearInterval(activityTimer)
       input.dispose()
       resize.dispose()
+      bell.dispose()
+      osc.dispose()
+      useAttention.getState().remove(agent.id)
       written.dispose()
       bufferChange.dispose()
       detach()
       term.dispose()
       termRef.current = null
     }
-  }, [agent.id, agent.provider, cwd, provider.label])
+  }, [agent.id, agent.provider, cwd, provider.label, provider.shell])
+
+  // A clicked notification asks this tile to take focus once it is on screen.
+  useEffect(() => {
+    if (focusRequest !== agent.id) return
+    useAttention.getState().requestFocus(null)
+    requestAnimationFrame(() => termRef.current?.focus())
+  }, [focusRequest, agent.id])
 
   return (
     <div
+      ref={rootRef}
       className={`${hidden ? 'hidden' : 'flex'} min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-bg ${
         reorder?.dropTarget
           ? 'border-accent ring-2 ring-accent/40'
-          : focused
-            ? 'border-accent/60'
-            : 'border-line'
+          : waiting
+            ? 'border-accent ring-1 ring-accent/50'
+            : focused
+              ? 'border-accent/60'
+              : 'border-line'
       } ${reorder?.dragging ? 'opacity-40' : ''}`}
       data-testid="agent-tile"
       data-agent-id={agent.id}
-      onFocus={() => setFocused(true)}
+      data-attention={waiting ? 'waiting' : undefined}
+      data-focused={focused || undefined}
+      onFocus={() => {
+        setFocused(true)
+        evaluateRef.current()
+      }}
       onBlur={() => setFocused(false)}
       onMouseDown={() => termRef.current?.focus()}
       onDragOver={(e) => {
@@ -216,7 +311,13 @@ export function AgentTerminal({
       >
         <span className="h-2 w-2 rounded-full" style={{ background: provider.color }} />
         <span className="font-medium">{agent.label}</span>
-        {status === 'running' ? <ActivityPill activity={activity} /> : <StatusPill status={status} />}
+        {status !== 'running' ? (
+          <StatusPill status={status} />
+        ) : waiting ? (
+          <WaitingPill />
+        ) : (
+          <ActivityPill activity={activity} />
+        )}
         <div className="ml-auto flex items-center gap-1">
           {(status === 'exited' || status === 'error') && (
             <button
@@ -290,6 +391,19 @@ function StatusPill({ status }: { status: Status }) {
     error: 'text-danger'
   }
   return <span className={`${styles[status]} text-[11px]`}>{status}</span>
+}
+
+function WaitingPill() {
+  return (
+    <span
+      className="flex items-center gap-1.5 text-[11px] font-medium text-accent"
+      title="Finished, or waiting for your input"
+      data-testid="agent-waiting"
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+      waiting
+    </span>
+  )
 }
 
 function ActivityPill({ activity }: { activity: Activity }) {

@@ -1,6 +1,6 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron'
 import { join } from 'node:path'
-import type { SpawnRequest } from '@shared/api'
+import type { AttentionNotice, SpawnRequest } from '@shared/api'
 import type { SearchQuery } from '@shared/search'
 import type { AppState } from '@shared/types'
 import { FileWatchers, listDir, readText, writeText } from './files'
@@ -29,6 +29,46 @@ const searchIds = new Map<string, number>()
 
 // Terminal text is drawn on a WebGL canvas, so e2e tests read pty output from here instead.
 if (process.env.SQUADSTORM_E2E) Object.assign(globalThis, { __squadstormPtys: ptys })
+
+// e2e tests read notifications and the dock badge from here, and real notifications stay off screen.
+const recordedNotices: (AttentionNotice & { click(): void })[] = []
+if (process.env.SQUADSTORM_E2E) Object.assign(globalThis, { __squadstormNotifications: recordedNotices, __squadstormBadge: '' })
+
+// Held until clicked or closed: a notification that is garbage-collected stops reporting clicks.
+const shownNotices = new Set<Notification>()
+
+/** Brings the window forward and tells the renderer which agent to show. */
+function showAgent(agentId: string): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+  app.focus({ steal: true })
+  mainWindow.webContents.send('attention:clicked', agentId)
+}
+
+function notify(notice: AttentionNotice): void {
+  const click = () => showAgent(notice.agentId)
+  if (process.env.SQUADSTORM_E2E) {
+    recordedNotices.push({ ...notice, click })
+    return
+  }
+  if (!Notification.isSupported()) return
+  const shown = new Notification({ title: notice.title, body: notice.body })
+  shownNotices.add(shown)
+  shown.on('click', () => {
+    shownNotices.delete(shown)
+    click()
+  })
+  shown.on('close', () => shownNotices.delete(shown))
+  shown.show()
+}
+
+function setBadge(count: number): void {
+  const text = count > 0 ? String(count) : ''
+  if (process.env.SQUADSTORM_E2E) Object.assign(globalThis, { __squadstormBadge: text })
+  else app.dock?.setBadge(text)
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -112,6 +152,9 @@ function registerIpc(): void {
   ipcMain.handle('git:diff', (_e, root: string, path: string, from?: string) => gitDiff(root, path, from))
   ipcMain.handle('git:commit', (_e, root: string, message: string) => gitCommit(root, message))
   ipcMain.handle('git:push', (_e, root: string) => gitPush(root))
+
+  ipcMain.on('attention:notify', (_e, notice: AttentionNotice) => notify(notice))
+  ipcMain.on('attention:badge', (_e, count: number) => setBadge(count))
 
   ipcMain.handle('pty:spawn', (_e, req: SpawnRequest) => ptys.spawn(req))
   ipcMain.handle('pty:kill', (_e, id: string) => ptys.kill(id))

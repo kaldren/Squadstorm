@@ -76,3 +76,7 @@ Step 3: deciding "seen" and the transition timing in the real terminal. False po
 - All → `pnpm typecheck && pnpm test && pnpm test:e2e` output pasted in the PR; `activity.test.ts` and `smoke.spec.ts` unchanged and green.
 
 ## Deviations
+- 2026-10-30 — `nextWaiting` also takes `replaying`, so the backlog rule is unit-tested (AC1) rather than only enforced in the tile.
+- 2026-10-30 — OSC 9 payloads that start with `<number>;` (ConEmu subcommands such as progress bars) are not treated as notifications; only plain-text OSC 9 is. Otherwise a CLI reporting progress would raise waiting all the time.
+- 2026-10-30 — Under `SQUADSTORM_E2E` the dock badge is recorded instead of set, like notifications, so local e2e runs don't leave a badge on the dock.
+- 2026-10-30 — A tile resets its previous activity when its agent (re)starts, so a restart after an exit mid-work doesn't count as "stopped working".

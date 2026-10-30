@@ -41,6 +41,13 @@ export interface CloneResult {
   reused: boolean
 }
 
+/** A macOS notification for an agent that needs you. */
+export interface AttentionNotice {
+  agentId: string
+  title: string
+  body: string
+}
+
 export interface SquadstormApi {
   state: {
     load(): Promise<AppState>
@@ -83,6 +90,13 @@ export interface SquadstormApi {
     commit(root: string, message: string): Promise<void>
     /** Pushes the current branch, publishing it to origin if it has no upstream yet. */
     push(root: string): Promise<void>
+  }
+  attention: {
+    /** Shows a macOS notification; clicking it brings the window forward and reports `onClicked`. */
+    notify(notice: AttentionNotice): void
+    /** How many agents are waiting, shown on the dock icon (0 clears it). */
+    badge(count: number): void
+    onClicked(listener: (agentId: string) => void): () => void
   }
   pty: {
     spawn(req: SpawnRequest): Promise<SpawnResult>
