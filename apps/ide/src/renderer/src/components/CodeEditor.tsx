@@ -87,14 +87,23 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict }: 
     else buffer.state = buffer.state.update(spec).state
   }
 
-  /** The file as it is on disk now: null when it is gone, undefined when it can't be read as text. */
+  /** Bumped by every save of a path, so reads started before it can be told apart. */
+  const writes = useRef(new Map<string, number>())
+
+  /**
+   * The file as it is on disk now: null when it is gone, undefined when it can't be read as text or
+   * the read was overtaken by a save (its answer would be older than what was just written).
+   */
   const readDisk = async (path: string): Promise<string | null | undefined> => {
+    const generation = writes.current.get(path) ?? 0
+    let disk: string | null | undefined
     try {
       const result = await window.api.files.read(propsRef.current.root, path)
-      return 'error' in result ? undefined : result.content
+      disk = 'error' in result ? undefined : result.content
     } catch (e) {
-      return /ENOENT/.test((e as Error).message) ? null : undefined
+      disk = ipcMessage(e).startsWith('ENOENT') ? null : undefined
     }
+    return (writes.current.get(path) ?? 0) === generation ? disk : undefined
   }
 
   const setConflict = (path: string, next: Conflict | undefined) => {
@@ -105,7 +114,8 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict }: 
     if (had !== (next !== undefined)) propsRef.current.onConflict(path, next !== undefined)
     if (shownRef.current === path) {
       setShownConflict(next ?? null)
-      if (!next) setComparing(false)
+      // A deletion has nothing to compare against.
+      if (!next || next.disk === null) setComparing(false)
     }
   }
 
@@ -129,6 +139,8 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict }: 
     const doc = liveState(path, buffer).doc.toString()
     switch (diskChange({ saved: buffer.saved, buffer: doc, disk })) {
       case 'none':
+        // The disk is back to what was loaded (e.g. the agent undid its change): nothing to resolve.
+        if (buffer.conflict) setConflict(path, undefined)
         return 'free'
       case 'in-sync':
         buffer.saved = disk
@@ -152,6 +164,7 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict }: 
     if (disk !== undefined && followDisk(path, disk) !== 'free') return
     const content = liveState(path, buffer).doc.toString()
     try {
+      writes.current.set(path, (writes.current.get(path) ?? 0) + 1)
       await window.api.files.write(propsRef.current.root, path, content)
       buffer.saved = content
       setConflict(path, undefined)
@@ -173,7 +186,8 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict }: 
       setConflict(path, undefined)
       propsRef.current.onDirty(path, liveState(path, buffer).doc.toString() !== disk)
     }
-    viewRef.current?.focus()
+    // After the banner and comparison are gone: the editor can't take focus while still hidden.
+    requestAnimationFrame(() => viewRef.current?.focus())
   }
 
   const createState = (path: string, content: string) => {
@@ -325,10 +339,10 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict }: 
         {message && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-muted">{message}</div>
         )}
-        {showConflict && comparing && viewRef.current && shownRef.current !== null && (
+        {showConflict && comparing && conflict.disk !== null && viewRef.current && shownRef.current !== null && (
           <ConflictDiff
             path={shownRef.current}
-            disk={conflict.disk ?? ''}
+            disk={conflict.disk}
             mine={viewRef.current.state.doc.toString()}
           />
         )}
