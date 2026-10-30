@@ -21,7 +21,7 @@ Squadstorm is a lightweight, AI-first IDE for macOS. Point it at a project, choo
 Coding agents are fast, but you can only run one per terminal tab, and the tabs pile up quickly. Squadstorm treats agents as a team:
 
 - **Parallel by default.** Run three Claudes on three tickets while Codex writes tests and a plain shell sits alongside.
-- **See who's working.** Each tile shows whether its agent is `working`, `online` or `idle`, based on its terminal traffic, so you can tell at a glance which agent needs you.
+- **See who's working.** Each tile shows whether its agent is `working`, `online` or `idle`, based on its terminal traffic. When an agent finishes or waits for you, its tile and workspace say so, the dock shows how many are waiting, and a macOS notification takes you straight to it while you're in another app.
 - **Review in place.** A built-in code view, diff viewer and git panel let you check and ship what the agents wrote without leaving the window.
 - **Light and native.** It's Electron with real PTYs, xterm.js with WebGL rendering, and CodeMirror 6. There are no extensions to install and nothing to configure.
 

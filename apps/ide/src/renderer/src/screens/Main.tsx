@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { WorkspaceSidebar } from '../components/WorkspaceSidebar'
 import { WorkspaceView } from '../components/WorkspaceView'
+import { useAttention } from '../stores/attention'
 import { useWorkspaces } from '../stores/workspaces'
 
 export function Main() {
@@ -24,6 +25,20 @@ export function Main() {
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [])
+
+  // A clicked notification shows its agent: its workspace, the Agents view, then its tile.
+  useEffect(
+    () =>
+      window.api.attention.onClicked((agentId) => {
+        const { workspaces, setActive, setView } = useWorkspaces.getState()
+        const workspace = workspaces.find((w) => w.agents.some((a) => a.id === agentId))
+        if (!workspace) return
+        setActive(workspace.id)
+        setView(workspace.id, 'agents')
+        useAttention.getState().requestFocus(agentId)
+      }),
+    []
+  )
 
   return (
     <Group orientation="horizontal" className="h-full">

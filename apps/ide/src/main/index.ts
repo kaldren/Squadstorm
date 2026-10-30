@@ -1,6 +1,6 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron'
 import { join } from 'node:path'
-import type { SpawnRequest } from '@shared/api'
+import type { AttentionNotice, SpawnRequest } from '@shared/api'
 import type { SearchQuery } from '@shared/search'
 import type { AppState } from '@shared/types'
 import { FileWatchers, listDir, readText, writeText } from './files'
@@ -30,6 +30,57 @@ const searchIds = new Map<string, number>()
 // Terminal text is drawn on a WebGL canvas, so e2e tests read pty output from here instead.
 if (process.env.SQUADSTORM_E2E) Object.assign(globalThis, { __squadstormPtys: ptys })
 
+// e2e tests read notifications and the dock badge from here, and real notifications stay off screen.
+const recordedNotices: (AttentionNotice & { click(): void })[] = []
+if (process.env.SQUADSTORM_E2E) Object.assign(globalThis, { __squadstormNotifications: recordedNotices, __squadstormBadge: '' })
+
+// The latest notification per agent, held so it isn't garbage-collected (it would stop reporting
+// clicks). A newer one for the same agent replaces it, which keeps this bounded by the agent count.
+const shownNotices = new Map<string, Notification>()
+
+/** Renderer input is untrusted: plain single-line text of bounded length. */
+const cleanText = (value: unknown, max: number) =>
+  typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').trim().slice(0, max) : ''
+
+/** Brings the window forward and tells the renderer which agent to show. */
+function showAgent(agentId: string): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+  app.focus({ steal: true })
+  mainWindow.webContents.send('attention:clicked', agentId)
+}
+
+function notify(input: AttentionNotice): void {
+  const notice = { agentId: cleanText(input?.agentId, 100), title: cleanText(input?.title, 120), body: cleanText(input?.body, 240) }
+  if (!notice.agentId || !notice.title) return
+  const click = () => showAgent(notice.agentId)
+  if (process.env.SQUADSTORM_E2E) {
+    recordedNotices.push({ ...notice, click })
+    return
+  }
+  if (!Notification.isSupported()) return
+  shownNotices.get(notice.agentId)?.close()
+  const shown = new Notification({ title: notice.title, body: notice.body })
+  shownNotices.set(notice.agentId, shown)
+  const forget = () => {
+    if (shownNotices.get(notice.agentId) === shown) shownNotices.delete(notice.agentId)
+  }
+  shown.on('click', () => {
+    forget()
+    click()
+  })
+  shown.on('close', forget)
+  shown.show()
+}
+
+function setBadge(count: unknown): void {
+  const text = Number.isInteger(count) && (count as number) > 0 ? String(count) : ''
+  if (process.env.SQUADSTORM_E2E) Object.assign(globalThis, { __squadstormBadge: text })
+  else app.dock?.setBadge(text)
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -48,6 +99,8 @@ function createWindow(): void {
   })
 
   mainWindow.once('ready-to-show', () => mainWindow?.show())
+  // A fresh page starts with no waiting agents (it re-counts them), and a closed window has none.
+  mainWindow.webContents.on('did-start-loading', () => setBadge(0))
 
   // Links printed by agents (auth URLs, docs) open in the real browser, never inside the app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -63,6 +116,7 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => {
     mainWindow = null
+    setBadge(0)
   })
 }
 
@@ -112,6 +166,9 @@ function registerIpc(): void {
   ipcMain.handle('git:diff', (_e, root: string, path: string, from?: string) => gitDiff(root, path, from))
   ipcMain.handle('git:commit', (_e, root: string, message: string) => gitCommit(root, message))
   ipcMain.handle('git:push', (_e, root: string) => gitPush(root))
+
+  ipcMain.on('attention:notify', (_e, notice: AttentionNotice) => notify(notice))
+  ipcMain.on('attention:badge', (_e, count: unknown) => setBadge(count))
 
   ipcMain.handle('pty:spawn', (_e, req: SpawnRequest) => ptys.spawn(req))
   ipcMain.handle('pty:kill', (_e, id: string) => ptys.kill(id))
