@@ -127,6 +127,12 @@ test('isolated agents work in their own worktrees', async () => {
   await change.click()
   await expect(s.page.getByTestId('diff-view').filter({ visible: true })).toContainText('wt-only.txt')
 
+  // Its review holds only that agent's change.
+  await s.page.getByTestId('review-all').filter({ visible: true }).click()
+  const reviewed = s.page.getByTestId('review-file').filter({ visible: true })
+  await expect(reviewed).toHaveCount(1)
+  await expect(reviewed).toHaveAttribute('data-path', 'wt-only.txt')
+
   await s.app.close()
 })
 

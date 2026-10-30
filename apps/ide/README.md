@@ -68,7 +68,7 @@ Press **⌘E** to switch between your agents and a full editor:
 </table>
 
 ### 🔀 Changes and history
-See every file your agents touched with an inline diff. Write a message, **commit** and **push** from the same panel, then browse past commits and their diffs in **History**.
+See every file your agents touched with an inline diff, and marked in the file tree. **Review all** puts every change in one scrolling view with its `+N −M`, where you can discard a single hunk (with Undo) or a whole file (new files go to the Trash). Untick the files that shouldn't go in, write a message, **commit** and **push** from the same panel, then browse past commits and their diffs in **History**. With a worktree per agent, pick the agent in the Code view to review just its work.
 
 <img src="docs/screenshots/changes.png" alt="The Changes panel showing an agent's diff, ready to commit" />
 

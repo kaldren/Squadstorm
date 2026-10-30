@@ -64,3 +64,7 @@ Step 6, discarding, because it changes files on disk. Both paths go through `res
 - All → `pnpm typecheck && pnpm test && pnpm test:e2e` output in the PR
 
 ## Deviations
+- 2026-10-30 — AC6 is checked in `e2e/worktrees.spec.ts › isolated agents work in their own worktrees` (its scoped Code view already has an agent's change), not a separate test.
+- 2026-10-30 — The Changes panel also gets a per-row **discard** (↺) next to the checkbox, the same file discard as in the review, so a single file doesn't need the whole review open.
+- 2026-10-30 — Hunk Discard buttons are styled through a `.cm-discard-hunk` rule in `main.css`, since CodeMirror renders them outside React.
+
