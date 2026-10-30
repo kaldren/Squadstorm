@@ -1,6 +1,6 @@
 # Plan: Know when an agent needs you
 
-From: intent.md + spec.md in intent/2026-10-30-agent-notifications/. Status: draft.
+From: intent.md + spec.md in intent/2026-10-30-agent-notifications/. Status: Accepted.
 Written without changing any code.
 
 ## Files that change

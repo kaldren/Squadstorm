@@ -1,6 +1,6 @@
 # Plan: Unsaved edits silently overwrite agent changes
 
-From: intent.md + spec.md in intent/2026-10-30-save-conflicts/. Status: draft.
+From: intent.md + spec.md in intent/2026-10-30-save-conflicts/. Status: Accepted.
 Written without changing any code.
 
 ## Files that change
