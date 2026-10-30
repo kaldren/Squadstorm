@@ -1,6 +1,6 @@
 # Plan: Agents resume their conversations after a restart
 
-From: intent.md + spec.md in intent/2026-10-30-resume-agents/. Status: draft.
+From: intent.md + spec.md in intent/2026-10-30-resume-agents/. Status: accepted.
 Written without changing any code. Built last: it touches `AgentTerminal.tsx` and `providers.ts`, and uses per-agent cwds from agent-worktrees.
 
 ## Files that change
