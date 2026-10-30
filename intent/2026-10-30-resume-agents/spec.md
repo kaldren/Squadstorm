@@ -51,7 +51,7 @@ Checked: Claude Code 2.1.314 (`--session-id <uuid>`, `-r/--resume <id>`); Codex 
 - A flag avoids asking twice when quit closes the window.
 
 ## Flagged concerns
-- [ ] **Codex in a shared folder starts fresh** instead of guessing. `--last` would pick whichever Codex session in that folder ran last, possibly another agent's or one you ran yourself. Proposed: accept. With agent-worktrees, isolated Codex agents resume reliably. Alternative: read Codex's session files to match sessions to agents. That's fragile, because it depends on Codex's internal storage format.
+- [x] **Codex in a shared folder starts fresh** instead of guessing. `--last` would pick whichever Codex session in that folder ran last, possibly another agent's or one you ran yourself. Proposed: accept. With agent-worktrees, isolated Codex agents resume reliably. Alternative: read Codex's session files to match sessions to agents. That's fragile, because it depends on Codex's internal storage format. **Resolved 2026-10-30: start fresh.**
 - [ ] **Even a sole Codex agent can resume the wrong conversation** if you ran `codex` yourself in the same folder after it. Proposed: accept, and mention it in the README.
 - [ ] **The resume fallback is inferred from a fast non-zero exit.** A CLI that fails to start for another reason (bad auth, for example) also triggers one fresh retry. Proposed: accept. It's a single retry, and the error output stays visible.
 - [ ] **Closing the window, not only quitting, gets the guard,** because closing the window stops the agents too. Proposed: yes.
