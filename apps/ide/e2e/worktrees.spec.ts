@@ -1,14 +1,20 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Locator, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 
 // Stand-in for the agent CLIs: says where it runs and on which branch, then runs whatever the test
 // types, so the test can make an agent write and commit files in its own folder.
 const FAKE_AGENT = 'echo "pwd=$(pwd)"; echo "branch=$(git branch --show-current)"; exec sh'
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' })
+
+/** The ✕ of a workspace in the sidebar only shows on hover. */
+async function closeWorkspace(page: Page, name: string) {
+  await page.locator('nav [role="button"]').filter({ hasText: name }).hover()
+  await page.getByRole('button', { name: `Close ${name}`, exact: true }).click()
+}
 
 function repo(): string {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-repo-')))
@@ -192,6 +198,94 @@ test('removing an agent', async () => {
   await expect.poll(() => existsSync(committed)).toBe(false)
   expect(branches()).toMatch(/^squadstorm\/claude-1-[0-9a-f]{4}$/)
   expect(s.dialogs.at(-1)).toMatch(/^Kept squadstorm\/claude-1-[0-9a-f]{4}: it has commits that aren't merged yet\.$/)
+
+  await s.app.close()
+})
+
+test('a merge that would conflict is undone and explained', async () => {
+  const project = repo()
+  const s = await launch(project)
+  await start(s)
+  const tile = s.page.getByTestId('agent-tile')
+  const worktree = await cwdOf(s.app, tile)
+
+  await run(s.page, tile, 'echo agent > README.md && git commit -qam "Agent edit"')
+  await expect.poll(() => git(worktree, 'log', '-1', '--format=%s').trim()).toBe('Agent edit')
+  writeFileSync(join(project, 'README.md'), 'mine\n')
+  git(project, 'commit', '-qam', 'My edit')
+
+  await tile.getByTestId('agent-menu').click()
+  await s.page.getByTestId('agent-merge').click()
+  await expect(tile.getByTestId('agent-message')).toContainText('Merging would conflict with main')
+  // The workspace is left exactly as it was: no merge in progress, no conflict markers.
+  expect(() => git(project, 'rev-parse', '-q', '--verify', 'MERGE_HEAD')).toThrow()
+  expect(git(project, 'status', '--porcelain').trim()).toBe('')
+
+  await s.app.close()
+})
+
+test('closing a workspace releases every worktree after one question', async () => {
+  const project = repo()
+  const s = await launch(project)
+  await start(s, { codex: 1 })
+  const tiles = s.page.getByTestId('agent-tile')
+  await expect(tiles).toHaveCount(2)
+  const [claude, codex] = [await cwdOf(s.app, tiles.nth(0)), await cwdOf(s.app, tiles.nth(1))]
+  await run(s.page, tiles.nth(1), 'echo wip > wip.txt')
+  await expect.poll(() => existsSync(join(codex, 'wip.txt'))).toBe(true)
+
+  // Turning isolation off: the next agent shares the workspace folder.
+  await s.page.getByTestId('isolate-toggle').uncheck()
+  await s.page.getByRole('button', { name: '+ Claude' }).click()
+  await expect(tiles).toHaveCount(3)
+  expect(await cwdOf(s.app, tiles.nth(2))).toBe(project)
+  await expect(tiles.nth(2).getByTestId('agent-branch')).toHaveCount(0)
+
+  const close = () => closeWorkspace(s.page, basename(project))
+  // Declining to discard keeps the workspace and every agent.
+  s.answers.push(true, false)
+  await close()
+  await expect.poll(() => s.dialogs.length).toBe(2)
+  expect(s.dialogs[1]).toContain('Codex 1 (1 change)')
+  await expect(tiles).toHaveCount(3)
+  expect(existsSync(join(codex, 'wip.txt'))).toBe(true)
+
+  // Agreeing removes both worktrees and the workspace.
+  s.answers.push(true, true)
+  await close()
+  await expect(s.page.getByTestId('pick-folder')).toBeVisible()
+  await expect.poll(() => [existsSync(claude), existsSync(codex)]).toEqual([false, false])
+  expect(git(project, 'branch', '--list', 'squadstorm/*').trim()).toBe('')
+
+  await s.app.close()
+})
+
+test('a workspace whose folder is gone can still be closed', async () => {
+  const project = repo()
+  const s = await launch(project)
+  await start(s)
+  await cwdOf(s.app, s.page.getByTestId('agent-tile'))
+  rmSync(project, { recursive: true, force: true })
+
+  s.answers.push(true, true)
+  await closeWorkspace(s.page, basename(project))
+  await expect.poll(() => s.dialogs.at(-1) ?? '').toContain('Remove it from Squadstorm anyway')
+  await expect(s.page.getByTestId('pick-folder')).toBeVisible()
+
+  await s.app.close()
+})
+
+test('repos without commits offer no worktrees', async () => {
+  const project = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-empty-')))
+  git(project, 'init', '-q', '-b', 'main')
+  const s = await launch(project)
+  await s.page.getByTestId('pick-folder').click()
+  await expect(s.page.getByTestId('start')).toBeEnabled()
+  await s.page.waitForTimeout(500)
+  await expect(s.page.getByTestId('isolate')).toHaveCount(0)
+  await s.page.getByTestId('start').click()
+  await expect(s.page.getByTestId('isolate-toggle')).toBeDisabled()
+  await expect(s.page.getByTestId('agent-tile')).toHaveCount(1)
 
   await s.app.close()
 })
