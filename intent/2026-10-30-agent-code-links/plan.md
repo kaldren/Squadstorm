@@ -1,6 +1,6 @@
 # Plan: Link the code I'm reading and the agents
 
-From: intent.md + spec.md in intent/2026-10-30-agent-code-links/. Status: draft.
+From: intent.md + spec.md in intent/2026-10-30-agent-code-links/. Status: accepted.
 Written without changing any code. Built after agent-worktrees and review-changes (it touches `AgentTerminal.tsx`, `FileTree.tsx` and `ChangesPanel.tsx`).
 
 ## Files that change
