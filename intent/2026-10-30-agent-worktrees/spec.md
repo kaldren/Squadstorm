@@ -70,7 +70,7 @@ Both fields are optional, so saved state loads unchanged (R7).
   Closing a workspace runs the same checks for all its isolated agents, behind one combined confirmation.
 
 ## Flagged concerns
-- [ ] **Default.** Isolation is opt-in (off by default) per workspace. Your own sdlc-loop runs `[P]` steps in parallel worktrees, which argues for on. Proposed: off, because shared is today's behaviour and agents that collaborate need it. Flip the default?
+- [x] **Default.** Isolation is opt-in (off by default) per workspace. Your own sdlc-loop runs `[P]` steps in parallel worktrees, which argues for on. Proposed: off, because shared is today's behaviour and agents that collaborate need it. **Resolved 2026-10-30: off by default.**
 - [ ] **Dependencies in a fresh worktree.** A new worktree has no `node_modules`, so an agent's first `pnpm test` fails until it installs. Proposed: don't install automatically (it's per project and slow); the agent sees the error and runs the install itself. Alternative: an optional per-workspace "setup command" run in each new worktree. Later?
 - [ ] **Starting an agent with a task prompt** (intent open question). Proposed: out of scope here, and listed as "later". It needs its own UI and provider-specific arguments.
 - [ ] **Merge runs in your workspace folder.** It fails if the workspace has uncommitted changes that touch the same files. Proposed: refuse with git's message and don't auto-stash.
