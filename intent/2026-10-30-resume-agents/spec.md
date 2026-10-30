@@ -1,6 +1,6 @@
 # Spec: Agents resume their conversations after a restart
 
-From: intent/2026-10-30-resume-agents/intent.md. Status: draft.
+From: intent/2026-10-30-resume-agents/intent.md. Status: accepted.
 Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill.
 Checked: Claude Code 2.1.314 (`--session-id <uuid>`, `-r/--resume <id>`); Codex 0.166 (`codex resume [id] [--last]`; the resume picker and `--last` are filtered to the current folder unless `--all`; there is no flag to choose a session id at start).
 
@@ -52,9 +52,9 @@ Checked: Claude Code 2.1.314 (`--session-id <uuid>`, `-r/--resume <id>`); Codex 
 
 ## Flagged concerns
 - [x] **Codex in a shared folder starts fresh** instead of guessing. `--last` would pick whichever Codex session in that folder ran last, possibly another agent's or one you ran yourself. Proposed: accept. With agent-worktrees, isolated Codex agents resume reliably. Alternative: read Codex's session files to match sessions to agents. That's fragile, because it depends on Codex's internal storage format. **Resolved 2026-10-30: start fresh.**
-- [ ] **Even a sole Codex agent can resume the wrong conversation** if you ran `codex` yourself in the same folder after it. Proposed: accept, and mention it in the README.
-- [ ] **The resume fallback is inferred from a fast non-zero exit.** A CLI that fails to start for another reason (bad auth, for example) also triggers one fresh retry. Proposed: accept. It's a single retry, and the error output stays visible.
-- [ ] **Closing the window, not only quitting, gets the guard,** because closing the window stops the agents too. Proposed: yes.
+- [x] **Even a sole Codex agent can resume the wrong conversation** if you ran `codex` yourself in the same folder after it. Proposed: accept, and mention it in the README. **Resolved 2026-10-30: as proposed.**
+- [x] **The resume fallback is inferred from a fast non-zero exit.** A CLI that fails to start for another reason (bad auth, for example) also triggers one fresh retry. Proposed: accept. It's a single retry, and the error output stays visible. **Resolved 2026-10-30: as proposed.**
+- [x] **Closing the window, not only quitting, gets the guard,** because closing the window stops the agents too. Proposed: yes. **Resolved 2026-10-30: as proposed.**
 
 ## Risk
 Low to medium. It changes how agent CLIs are started. A wrong arguments list would stop agents from starting, which the e2e tests catch for both providers. The quit guard can't trap the user: Quit always remains an option. No data written beyond one optional state field.
