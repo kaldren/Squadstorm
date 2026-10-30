@@ -1,6 +1,6 @@
 # Plan: Run each agent in its own worktree
 
-From: intent.md + spec.md in intent/2026-10-30-agent-worktrees/. Status: draft.
+From: intent.md + spec.md in intent/2026-10-30-agent-worktrees/. Status: accepted.
 Written without changing any code.
 
 ## Files that change
