@@ -1,6 +1,6 @@
 # Plan: Review an agent's changes in one place and keep or discard them
 
-From: intent.md + spec.md in intent/2026-10-30-review-changes/. Status: draft.
+From: intent.md + spec.md in intent/2026-10-30-review-changes/. Status: accepted.
 Written without changing any code. Built after agent-worktrees is merged (for AC6); everything else is independent of it.
 
 ## Files that change
