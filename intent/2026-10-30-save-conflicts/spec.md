@@ -58,3 +58,5 @@ From intent.md:
 - Deleted on disk while dirty? **Answered:** R6.
 
 ## Changelog
+- 2026-10-30 — Design: Keep mine sets `saved = disk`, where `disk` may be null for a deleted file (`saved` becomes `string | null`), not `disk ?? ''`. Reason: with `''` the next save on a deleted file is flagged as a conflict again. Compare is also hidden for a deleted file.
+

@@ -59,3 +59,9 @@ Step 3, the watcher change. Today dirty buffers are skipped before any read. Now
 - All → `pnpm typecheck && pnpm test && pnpm test:e2e` output pasted in the PR.
 
 ## Deviations
+- 2026-10-30 — `Buffer.saved` is `string | null` (null = a deletion was acknowledged) instead of `disk ?? ''`. With `''`, Keep mine on a deleted file left ⌘S blocked forever, because `diskChange` saw `'' ≠ null` as another conflict. Found by `tests/conflict.test.ts`; the spec's Changelog has the matching amendment.
+- 2026-10-30 — Compare is hidden for a deleted file as well as Reload: there is no disk version to compare against.
+- 2026-10-30 — The merge view in Compare shows its change gutter (`gutter: true`) like `DiffView.tsx`, and the save error alert strips the IPC prefix like the other panels do.
+- 2026-10-30 — From review: a conflict clears when the disk goes back to the loaded version; focus returns to the editor after Reload/Keep mine once the banner is gone; reads overtaken by a save are discarded (per-path write counter); `ENOENT` is matched on the cleaned error message. Regression steps added to the e2e test first.
+- 2026-10-30 — Not done (review nits, accepted): undoing your edits back to the loaded version leaves the banner until you choose; a file an agent made binary or over 2 MB is saved over without the check, as before.
+

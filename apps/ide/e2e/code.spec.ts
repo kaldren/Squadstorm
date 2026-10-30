@@ -1,6 +1,6 @@
 import { _electron as electron, expect, test } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -57,6 +57,104 @@ test('code view: browse, edit, save, follow agent edits, switch back', async () 
   await page.getByRole('tab', { name: 'Code' }).click()
   await expect(editor).toContainText('export const changed = true')
   await expect(page.getByTestId('editor-tab')).toHaveCount(1)
+
+  await app.close()
+})
+
+test("code view: a save never overwrites an agent's change", async () => {
+  const userData = mkdtempSync(join(tmpdir(), 'squadstorm-e2e-data-'))
+  const project = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-project-')))
+  const file = join(project, 'index.ts')
+  writeFileSync(file, 'export const answer = 1\n')
+  const disk = () => (existsSync(file) ? readFileSync(file, 'utf8') : '')
+
+  const app = await electron.launch({
+    args: ['.'],
+    env: { ...process.env, SQUADSTORM_E2E: '1', SQUADSTORM_USER_DATA: userData, SQUADSTORM_AGENT_CMD: 'exec cat' }
+  })
+  await app.evaluate(({ dialog }, folder) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] })
+  }, project)
+  const page = await app.firstWindow()
+  await page.getByTestId('pick-folder').click()
+  await page.getByTestId('start').click()
+  await page.getByRole('tab', { name: 'Code' }).click()
+  await page.getByTestId('file-entry').filter({ hasText: 'index.ts' }).click()
+  const editor = page.getByTestId('code-editor').locator('.cm-content')
+  await expect(editor).toContainText('export const answer = 1')
+  const banner = page.getByTestId('disk-conflict')
+  const typeAtEnd = async (text: string) => {
+    await editor.click()
+    await page.keyboard.press('Meta+ArrowDown')
+    await page.keyboard.type(text)
+    await expect(page.getByTestId('dirty-dot').or(page.getByTestId('conflict-dot'))).toHaveCount(1)
+  }
+
+  // The repro: unsaved edits, an agent appends a line, ⌘S. The agent's line must survive.
+  await typeAtEnd('// mine')
+  appendFileSync(file, 'agent line\n')
+  await page.keyboard.press('Meta+s')
+  await expect(banner).toBeVisible()
+  await expect(banner).toContainText('changed on disk')
+  await page.waitForTimeout(500)
+  expect(disk()).toContain('agent line')
+  expect(disk()).not.toContain('// mine')
+  await expect(page.getByTestId('conflict-dot')).toHaveCount(1)
+
+  // Compare shows both versions.
+  await banner.getByRole('button', { name: 'Compare' }).click()
+  const diff = page.getByTestId('conflict-diff')
+  await expect(diff).toContainText('agent line')
+  await expect(diff).toContainText('// mine')
+
+  // Reload takes the disk version and the file is clean again, with the editor still focused.
+  await banner.getByRole('button', { name: 'Reload' }).click()
+  await expect(banner).toBeHidden()
+  await expect(diff).toBeHidden()
+  await expect(editor).toContainText('agent line')
+  await expect(editor).not.toContainText('// mine')
+  await expect(page.getByTestId('dirty-dot')).toHaveCount(0)
+  await expect(page.getByTestId('conflict-dot')).toHaveCount(0)
+  await page.keyboard.type('// typed after reload')
+  await expect(editor).toContainText('// typed after reload')
+  await page.keyboard.press('Meta+s')
+  await expect.poll(disk).toContain('// typed after reload')
+
+  // An agent that puts the file back the way it was takes the conflict with it.
+  const before = disk()
+  await typeAtEnd('// mine too')
+  appendFileSync(file, 'passing agent line\n')
+  await expect(banner).toBeVisible()
+  writeFileSync(file, before)
+  await expect(banner).toBeHidden()
+  await expect(page.getByTestId('dirty-dot')).toHaveCount(1)
+  await page.keyboard.press('Meta+s')
+  await expect.poll(disk).toContain('// mine too')
+
+  // Keep mine: the banner goes, the file stays dirty, and the next save writes my version on purpose.
+  await typeAtEnd('// mine again')
+  appendFileSync(file, 'second agent line\n')
+  await expect(banner).toBeVisible()
+  await banner.getByRole('button', { name: 'Keep mine' }).click()
+  await expect(banner).toBeHidden()
+  await expect(page.getByTestId('dirty-dot')).toHaveCount(1)
+  await editor.click()
+  await page.keyboard.press('Meta+s')
+  await expect(page.getByTestId('dirty-dot')).toHaveCount(0)
+  await expect.poll(disk).toContain('// mine again')
+  expect(disk()).not.toContain('second agent line')
+
+  // Deleted on disk while dirty: no Reload, and keeping mine recreates the file.
+  await typeAtEnd('// before delete')
+  rmSync(file)
+  await expect(banner).toBeVisible()
+  await expect(banner).toContainText('deleted on disk')
+  await expect(banner.getByRole('button', { name: 'Reload' })).toHaveCount(0)
+  await banner.getByRole('button', { name: 'Keep mine' }).click()
+  await editor.click()
+  await page.keyboard.press('Meta+s')
+  await expect.poll(disk).toContain('// before delete')
+  await expect(page.getByTestId('dirty-dot')).toHaveCount(0)
 
   await app.close()
 })
