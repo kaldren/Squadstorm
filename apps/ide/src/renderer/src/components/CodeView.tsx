@@ -33,6 +33,15 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
   const [unchecked, setUnchecked] = useState<ReadonlySet<string>>(new Set())
   const git = useGitStatus(root, !hidden)
 
+  // Forget unticked files that are no longer changed, so a file that changes again starts ticked.
+  useEffect(() => {
+    setUnchecked((u) => {
+      const changed = new Set(git.status.changes.map((c) => c.path))
+      const kept = [...u].filter((p) => changed.has(p))
+      return kept.length === u.size ? u : new Set(kept)
+    })
+  }, [git.status.changes])
+
   // Once a change is committed or reverted, its diff has nothing left to show.
   const diffGone = diff !== null && !diff.commit && !git.status.changes.some((c) => c.path === diff.change.path)
   useEffect(() => {

@@ -79,8 +79,9 @@ export async function gitCommit(root: string, message: string, paths?: string[])
   if (paths) {
     if (paths.length === 0) throw new Error('Pick at least one file to commit.')
     paths.forEach((p) => resolveInside(root, p))
-    await git(root, ['add', '-A', '--', ...paths])
-    await git(root, ['commit', '-m', message, '--', ...paths])
+    // Literal pathspecs: `app/[id]/page.tsx` or `:x` are file names here, not patterns.
+    await git(root, ['--literal-pathspecs', 'add', '-A', '--', ...paths])
+    await git(root, ['--literal-pathspecs', 'commit', '-m', message, '--', ...paths])
     return
   }
   await git(root, ['add', '-A'])
@@ -99,7 +100,9 @@ export async function gitNumstat(root: string): Promise<Record<string, LineStats
     if (change.path in stats || change.kind !== 'A') continue
     const read = await readText(root, change.path).catch(() => ({ error: 'unreadable' }))
     stats[change.path] =
-      'error' in read ? { added: null, removed: null } : { added: read.content.split('\n').length - (read.content.endsWith('\n') ? 1 : 0), removed: 0 }
+      'error' in read
+        ? { added: null, removed: null }
+        : { added: read.content === '' ? 0 : read.content.split('\n').length - (read.content.endsWith('\n') ? 1 : 0), removed: 0 }
   }
   return stats
 }
@@ -119,11 +122,16 @@ async function trash(root: string, path: string): Promise<void> {
  * Throws away a file's uncommitted change: tracked files go back to HEAD, new files go to the Trash,
  * a rename is undone.
  */
-export async function gitDiscard(root: string, change: FileChange): Promise<void> {
+export async function gitDiscard(root: string, requested: FileChange): Promise<void> {
+  // Act on what git says now, not on the renderer's record: it may be seconds old, and only an exact
+  // current change entry may be discarded.
+  const change = (await gitStatus(root)).changes.find((c) => c.path === requested?.path)
+  if (!change) throw new Error(`${requested?.path} has no uncommitted changes any more.`)
   resolveInside(root, change.path)
   if (change.kind === 'C') throw new Error(`${change.path} has a merge conflict. Resolve it first.`)
-  const restore = (path: string) => git(root, ['restore', '--source=HEAD', '--staged', '--worktree', '--', path])
-  const unstage = (path: string) => git(root, ['rm', '--cached', '--quiet', '--ignore-unmatch', '--', path])
+  const restore = (path: string) =>
+    git(root, ['--literal-pathspecs', 'restore', '--source=HEAD', '--staged', '--worktree', '--', path])
+  const unstage = (path: string) => git(root, ['--literal-pathspecs', 'rm', '--cached', '--quiet', '--ignore-unmatch', '--', path])
   if (change.kind === 'M' || change.kind === 'D') return void (await restore(change.path))
   if (change.kind === 'R' && change.from) {
     resolveInside(root, change.from)

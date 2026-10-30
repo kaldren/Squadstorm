@@ -5,7 +5,7 @@ import type { FileChange } from '@shared/git'
 import type { AgentWorktree } from '@shared/types'
 import type { SearchQuery } from '@shared/search'
 import type { AppState } from '@shared/types'
-import { FileWatchers, listDir, readText, writeText } from './files'
+import { FileWatchers, listDir, readText, writeText, writeTextIfUnchanged } from './files'
 import { gitCommit, gitCommitDiff, gitCommitFiles, gitDiff, gitDiscard, gitLog, gitNumstat, gitPush, gitStatus } from './git'
 import { cloneRepo, githubStatus, listRepos } from './github'
 import { PtyManager } from './pty'
@@ -156,6 +156,9 @@ function registerIpc(): void {
   ipcMain.handle('files:read', (_e, root: string, path: string) => readText(root, path))
   ipcMain.handle('files:write', (_e, root: string, path: string, content: string) =>
     writeText(root, path, content)
+  )
+  ipcMain.handle('files:writeIfUnchanged', (_e, root: string, path: string, expected: string | null, content: string) =>
+    writeTextIfUnchanged(root, path, expected, String(content))
   )
   ipcMain.on('files:watch', (_e, root: string) => fileWatchers.watch(root))
   ipcMain.on('files:unwatch', (_e, root: string) => fileWatchers.unwatch(root))

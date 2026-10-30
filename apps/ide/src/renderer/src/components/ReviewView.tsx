@@ -22,6 +22,8 @@ interface Undo {
   path: string
   /** The file's content before the discard. */
   previous: string
+  /** Its content right after; undo only writes back while the file still holds exactly this. */
+  after: string
 }
 
 /**
@@ -89,9 +91,13 @@ export function ReviewView({ root, status, onOpenFile, onClose }: Props) {
   const undoDiscard = async () => {
     if (!undo) return
     setUndo(null)
-    await window.api.files.write(root, undo.path, undo.previous).catch((e) => setError(ipcMessage(e)))
+    await window.api.files.writeIfUnchanged(root, undo.path, undo.after, undo.previous).then(
+      () => setError(null),
+      (e) => setError(ipcMessage(e))
+    )
   }
 
+  const allCollapsed = changes.length > 0 && changes.every((c) => collapsed.has(c.path))
   const total = changes.reduce(
     (sum, c) => ({ added: sum.added + (stats[c.path]?.added ?? 0), removed: sum.removed + (stats[c.path]?.removed ?? 0) }),
     { added: 0, removed: 0 }
@@ -107,9 +113,9 @@ export function ReviewView({ root, status, onOpenFile, onClose }: Props) {
         </span>
         <button
           className="ml-auto text-muted hover:text-fg"
-          onClick={() => setCollapsed(collapsed.size === changes.length ? new Set() : new Set(changes.map((c) => c.path)))}
+          onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(changes.map((c) => c.path)))}
         >
-          {collapsed.size === changes.length ? 'Expand all' : 'Collapse all'}
+          {allCollapsed ? 'Expand all' : 'Collapse all'}
         </button>
         <button className="text-muted hover:text-fg" onClick={onClose} aria-label="Close review">
           ✕
@@ -130,7 +136,7 @@ export function ReviewView({ root, status, onOpenFile, onClose }: Props) {
               onToggle={() => toggle(change.path)}
               onOpen={() => onOpenFile(change.path)}
               onDiscardFile={() => void discardFile(change)}
-              onDiscardedHunk={(previous) => setUndo({ path: change.path, previous })}
+              onDiscardedHunk={(previous, after) => setUndo({ path: change.path, previous, after })}
               onError={setError}
             />
           ))
@@ -156,7 +162,7 @@ function ReviewFile(props: {
   onToggle(): void
   onOpen(): void
   onDiscardFile(): void
-  onDiscardedHunk(previous: string): void
+  onDiscardedHunk(previous: string, after: string): void
   onError(message: string): void
 }) {
   const { root, change, stats, collapsed } = props
@@ -180,22 +186,34 @@ function ReviewFile(props: {
     if (collapsed || !near) return
     let view: EditorView | null = null
     let cancelled = false
+    // Renders can overlap when the file changes twice quickly; only the newest may build the view.
+    let latest = 0
     const render = async () => {
+      const mine = ++latest
       try {
         const [{ original, modified }, lang] = await Promise.all([
           window.api.git.diff(root, change.path, change.from),
           languageFor(change.path)
         ])
-        if (cancelled) return
+        if (cancelled || mine !== latest) return
+        // Hunks can be discarded only where rewriting the file line by line is safe: text, one kind of
+        // line ending, no conflict.
+        const separator = lineSeparator(modified)
+        const discardable = change.kind !== 'C' && callbacks.current.stats?.added !== null && separator !== null
         view?.destroy()
         view = new EditorView({
           parent: hostRef.current!,
-          state: reviewState(modified, original, lang, async (before, after) => {
+          state: reviewState(modified, original, lang, discardable, async (edited, discarded) => {
+            // The editor works in '\n'; the file keeps its own line endings.
+            const before = separator === '\r\n' ? edited.replace(/\n/g, '\r\n') : edited
+            const after = separator === '\r\n' ? discarded.replace(/\n/g, '\r\n') : discarded
             try {
-              await window.api.files.write(root, change.path, after)
-              callbacks.current.onDiscardedHunk(before)
+              // Only if the file is still what this diff showed: an agent may have written since.
+              await window.api.files.writeIfUnchanged(root, change.path, before, after)
+              callbacks.current.onDiscardedHunk(before, after)
             } catch (e) {
               callbacks.current.onError(ipcMessage(e))
+              void render()
             }
           })
         })
@@ -232,7 +250,9 @@ function ReviewFile(props: {
           {stats === undefined ? (
             ''
           ) : stats.added === null ? (
-            <span className="text-muted">binary</span>
+            <span className="text-muted" title="Binary or too large to count">
+              —
+            </span>
           ) : (
             <>
               <span className="text-emerald-400">+{stats.added}</span> <span className="text-danger">−{stats.removed}</span>
@@ -265,26 +285,39 @@ function ReviewFile(props: {
  * The diff of one file, with a Discard button on each changed hunk. Discarding puts the hunk back to its
  * committed text in the editor; the new document is then written to disk via `onDiscard`.
  */
+/** The file's line ending when it uses only one kind ('\n' for none), or null when it mixes them. */
+function lineSeparator(text: string): string | null {
+  const crlf = (text.match(/\r\n/g) ?? []).length
+  const lf = (text.match(/\n/g) ?? []).length - crlf
+  const cr = (text.match(/\r/g) ?? []).length - crlf
+  if (cr > 0 || (crlf > 0 && lf > 0)) return null
+  return crlf > 0 ? '\r\n' : '\n'
+}
+
 function reviewState(
   modified: string,
   original: string,
   lang: Parameters<typeof diffExtensions>[1],
+  discardable: boolean,
   onDiscard: (before: string, after: string) => void
 ): EditorState {
-  const extensions = [
-    ...diffExtensions(original, lang, (type, action) => {
-      if (type === 'accept') {
-        const none = document.createElement('span')
-        none.hidden = true
-        return none
+  const controls: Parameters<typeof diffExtensions>[2] = discardable
+    ? (type, action) => {
+        if (type === 'accept') {
+          const none = document.createElement('span')
+          none.hidden = true
+          return none
+        }
+        const button = document.createElement('button')
+        button.textContent = 'Discard'
+        button.dataset.testid = 'discard-hunk'
+        button.className = 'cm-discard-hunk'
+        button.onclick = action
+        return button
       }
-      const button = document.createElement('button')
-      button.textContent = 'Discard'
-      button.dataset.testid = 'discard-hunk'
-      button.className = 'cm-discard-hunk'
-      button.onmousedown = action
-      return button
-    }),
+    : false
+  const extensions = [
+    ...diffExtensions(original, lang, controls),
     // The editor is read-only, so the only document changes are discarded hunks.
     EditorView.updateListener.of((u) => {
       if (u.docChanged) onDiscard(u.startState.doc.toString(), u.state.doc.toString())

@@ -65,6 +65,12 @@ Step 6, discarding, because it changes files on disk. Both paths go through `res
 
 ## Deviations
 - 2026-10-30 — AC6 is checked in `e2e/worktrees.spec.ts › isolated agents work in their own worktrees` (its scoped Code view already has an agent's change), not a separate test.
-- 2026-10-30 — The Changes panel also gets a per-row **discard** (↺) next to the checkbox, the same file discard as in the review, so a single file doesn't need the whole review open.
 - 2026-10-30 — Hunk Discard buttons are styled through a `.cm-discard-hunk` rule in `main.css`, since CodeMirror renders them outside React.
+- 2026-10-30 — From review, failing tests first:
+  - a hunk discard, and its Undo, write only if the file still holds what the view showed (`files.writeIfUnchanged`, a compare-and-write in main); otherwise nothing is written, the reason is shown and the diff reloads. Only the newest of overlapping diff loads builds the view;
+  - discards keep a CRLF file's line endings (the editor works in `\n`; text is converted back when written), and files with mixed endings, binary or non-UTF-8 content, or conflicts get no hunk buttons (only Discard file);
+  - git takes paths literally (`--literal-pathspecs`) for add, commit, restore and rm, so `app/[id]/page.tsx` or `:x` never match other files;
+  - main discards only an exact current change entry and uses git's current kind for it, not the renderer's (possibly stale) record;
+  - an empty new file counts `+0`; unticked files are forgotten once they're no longer changed; "Expand/Collapse all" only looks at current files; hunk buttons work from the keyboard (`onclick`).
+- 2026-10-30 — Not done (review nits, accepted): Undo is offered for one hunk at a time and only for files that existed before; a partial commit fails as a whole if a ticked file vanished since the last refresh; paths with tabs or newlines aren't covered by the numstat test; editors are built when their section scrolls into the window (not ahead of it).
 

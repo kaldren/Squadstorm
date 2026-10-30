@@ -81,6 +81,8 @@ export interface SquadstormApi {
     search(root: string, query: SearchQuery): Promise<SearchResult>
     read(root: string, path: string): Promise<ReadResult>
     write(root: string, path: string, content: string): Promise<void>
+    /** Writes only if the file still holds `expected` (null: absent); rejects otherwise. */
+    writeIfUnchanged(root: string, path: string, expected: string | null, content: string): Promise<void>
     watch(root: string): void
     unwatch(root: string): void
     onChanged(listener: (root: string, paths: string[]) => void): () => void

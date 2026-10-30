@@ -30,6 +30,8 @@ const api: SquadstormApi = {
     search: (root, query) => ipcRenderer.invoke('files:search', root, query),
     read: (root, path) => ipcRenderer.invoke('files:read', root, path),
     write: (root, path, content) => ipcRenderer.invoke('files:write', root, path, content),
+    writeIfUnchanged: (root, path, expected, content) =>
+      ipcRenderer.invoke('files:writeIfUnchanged', root, path, expected, content),
     watch: (root) => ipcRenderer.send('files:watch', root),
     unwatch: (root) => ipcRenderer.send('files:unwatch', root),
     onChanged: (listener) => subscribe<string[]>('files:changed', listener)
