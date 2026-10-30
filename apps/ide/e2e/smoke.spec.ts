@@ -13,8 +13,9 @@ function launch(): Promise<ElectronApplication> {
       ...process.env,
       SQUADSTORM_E2E: '1',
       SQUADSTORM_USER_DATA: userData,
-      // Stand-in for claude/codex: prints its cwd, then echoes input.
-      SQUADSTORM_AGENT_CMD: 'echo "fake agent in $(pwd)"; exec cat'
+      // Stand-in for claude/codex: prints its cwd and how it was asked to render, then echoes input.
+      SQUADSTORM_AGENT_CMD:
+        'echo "fake agent in $(pwd)"; echo "args=[$*] no-alt-screen-env=[$CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN]"; exec cat'
     }
   })
 }
@@ -46,6 +47,10 @@ test('setup → agent grid → add/remove → restored on relaunch', async () =>
 
   // Every agent runs in the project folder.
   await expect.poll(() => output(app, tiles.first())).toContain(`fake agent in ${project}`)
+
+  // Agents run inline, off the alternate screen, so their output stays in the terminal's scrollback.
+  await expect.poll(() => output(app, tiles.first())).toContain('args=[] no-alt-screen-env=[1]')
+  await expect.poll(() => output(app, tiles.nth(2))).toContain('args=[--no-alt-screen] no-alt-screen-env=[]')
 
   // Input reaches the right pty only.
   await tiles.nth(1).click()

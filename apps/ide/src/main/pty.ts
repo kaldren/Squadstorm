@@ -53,10 +53,11 @@ export class PtyManager {
 
     const path = await shellPath()
     const provider = PROVIDERS[req.provider]
-    // SQUADSTORM_AGENT_CMD swaps every agent for an arbitrary shell command (used by e2e tests).
+    // SQUADSTORM_AGENT_CMD swaps every agent for an arbitrary shell command (used by e2e tests),
+    // which still gets the provider's args as "$@".
     const override = process.env.SQUADSTORM_AGENT_CMD
     const file = override ? '/bin/sh' : this.resolve(req.provider, path)
-    const args = override ? ['-c', override] : provider.args
+    const args = override ? ['-c', override, 'sh', ...provider.args] : provider.args
     if (!file) {
       return { backlog: '', error: `"${provider.command}" was not found on your PATH.` }
     }
@@ -68,7 +69,7 @@ export class PtyManager {
         cols: req.cols,
         rows: req.rows,
         cwd: req.cwd,
-        env: { ...process.env, PATH: path, TERM: 'xterm-256color', COLORTERM: 'truecolor' }
+        env: { ...process.env, ...provider.env, PATH: path, TERM: 'xterm-256color', COLORTERM: 'truecolor' }
       })
     } catch (err) {
       return { backlog: '', error: `Failed to start ${provider.label}: ${(err as Error).message}` }
