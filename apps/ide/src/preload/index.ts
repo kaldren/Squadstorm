@@ -43,6 +43,15 @@ const api: SquadstormApi = {
     commit: (root, message) => ipcRenderer.invoke('git:commit', root, message),
     push: (root) => ipcRenderer.invoke('git:push', root)
   },
+  attention: {
+    notify: (notice) => ipcRenderer.send('attention:notify', notice),
+    badge: (count) => ipcRenderer.send('attention:badge', count),
+    onClicked: (listener) => {
+      const handler = (_e: IpcRendererEvent, agentId: string) => listener(agentId)
+      ipcRenderer.on('attention:clicked', handler)
+      return () => ipcRenderer.removeListener('attention:clicked', handler)
+    }
+  },
   pty: {
     spawn: (req) => ipcRenderer.invoke('pty:spawn', req),
     write: (id, data) => ipcRenderer.send('pty:write', id, data),

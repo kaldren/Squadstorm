@@ -16,6 +16,8 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
   const [tabs, setTabs] = useState<string[]>([])
   const [active, setActive] = useState<string | null>(null)
   const [dirty, setDirty] = useState<ReadonlySet<string>>(new Set())
+  // Files that changed on disk while they had unsaved edits.
+  const [conflicts, setConflicts] = useState<ReadonlySet<string>>(new Set())
   const [side, setSide] = useState<'files' | 'search' | 'changes' | 'history'>('files')
   const [reveal, setReveal] = useState<Reveal | null>(null)
   const [searchFocus, setSearchFocus] = useState(0)
@@ -73,17 +75,19 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
     const rest = tabs.filter((t) => t !== path)
     setTabs(rest)
     markDirty(path, false)
+    markConflict(path, false)
     if (active === path) setActive(rest[Math.min(index, rest.length - 1)] ?? null)
   }
 
-  const markDirty = (path: string, isDirty: boolean) =>
-    setDirty((d) => {
-      if (d.has(path) === isDirty) return d
-      const next = new Set(d)
-      if (isDirty) next.add(path)
-      else next.delete(path)
-      return next
-    })
+  const toggleIn = (set: ReadonlySet<string>, path: string, on: boolean): ReadonlySet<string> => {
+    if (set.has(path) === on) return set
+    const next = new Set(set)
+    if (on) next.add(path)
+    else next.delete(path)
+    return next
+  }
+  const markDirty = (path: string, isDirty: boolean) => setDirty((d) => toggleIn(d, path, isDirty))
+  const markConflict = (path: string, conflicted: boolean) => setConflicts((c) => toggleIn(c, path, conflicted))
 
   return (
     <div className={`${hidden ? 'hidden' : 'flex'} relative min-h-0 flex-1`}>
@@ -189,8 +193,18 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
                         close(path)
                       }}
                     >
-                      {/* Unsaved files show a dot that turns into the close button on hover. */}
-                      {dirty.has(path) ? (
+                      {/* Unsaved files show a dot that turns into the close button on hover; amber when the
+                          file also changed on disk. */}
+                      {conflicts.has(path) ? (
+                        <>
+                          <span
+                            className="h-1.5 w-1.5 rounded-full bg-amber-400 group-hover:hidden"
+                            title="Changed on disk while you had unsaved edits"
+                            data-testid="conflict-dot"
+                          />
+                          <span className="hidden group-hover:inline">✕</span>
+                        </>
+                      ) : dirty.has(path) ? (
                         <>
                           <span className="h-1.5 w-1.5 rounded-full bg-fg group-hover:hidden" data-testid="dirty-dot" />
                           <span className="hidden group-hover:inline">✕</span>
@@ -213,7 +227,14 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
               />
             )}
             <div className={diff ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
-              <CodeEditor root={root} tabs={tabs} active={active} reveal={reveal} onDirty={markDirty} />
+              <CodeEditor
+                root={root}
+                tabs={tabs}
+                active={active}
+                reveal={reveal}
+                onDirty={markDirty}
+                onConflict={markConflict}
+              />
             </div>
           </div>
         </Panel>
