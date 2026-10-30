@@ -1,5 +1,15 @@
 export type Provider = 'claude' | 'codex' | 'terminal'
 
+/** Whether to start an agent's conversation or pick its previous one back up. */
+export type LaunchMode = 'fresh' | 'resume'
+
+export interface SessionContext {
+  /** The agent's id, a v4 UUID. */
+  id: string
+  /** No other agent of the same CLI runs in the same folder. */
+  soleInFolder: boolean
+}
+
 export interface ProviderInfo {
   label: string
   command: string
@@ -10,6 +20,11 @@ export interface ProviderInfo {
   color: string
   /** Runs the user's login shell ($SHELL) instead of `command`. */
   shell?: boolean
+  /**
+   * Arguments that start an agent's own conversation, and that resume it after a restart; `resume`
+   * is null when the previous conversation can't be told apart from others, so it starts fresh.
+   */
+  session?: (ctx: SessionContext) => { fresh: string[]; resume: string[] | null }
 }
 
 // Adding a provider (gemini, aider…) is a matter of adding an entry here.
@@ -22,10 +37,32 @@ export const PROVIDERS: Record<Provider, ProviderInfo> = {
     args: [],
     // Undocumented; Claude Code reads it to stay off the alternate screen.
     env: { CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: '1' },
-    color: '#d97757'
+    color: '#d97757',
+    // The agent's id names its Claude session, so each tile resumes exactly its own conversation.
+    session: ({ id }) => ({ fresh: ['--session-id', id], resume: ['--resume', id] })
   },
-  codex: { label: 'Codex', command: 'codex', args: ['--no-alt-screen'], color: '#10a37f' },
+  codex: {
+    label: 'Codex',
+    command: 'codex',
+    args: ['--no-alt-screen'],
+    color: '#10a37f',
+    // Codex can't name a session up front. `resume --last` picks the newest one in the folder, which
+    // is this agent's only when no other Codex agent works there.
+    session: ({ soleInFolder }) => ({ fresh: [], resume: soleInFolder ? ['resume', '--last'] : null })
+  },
   terminal: { label: 'Terminal', command: 'zsh', args: ['-l'], color: '#8b93a7', shell: true }
 }
 
 export const PROVIDER_IDS = Object.keys(PROVIDERS) as Provider[]
+
+/**
+ * The arguments an agent CLI starts with: its session arguments first (Codex's `resume` is a
+ * subcommand), then the provider's own. Falls back to a fresh start when resuming isn't possible.
+ */
+export function launchArgs(provider: Provider, mode: LaunchMode, ctx: SessionContext): { args: string[]; mode: LaunchMode } {
+  const info = PROVIDERS[provider]
+  const session = info.session?.(ctx)
+  if (!session) return { args: info.args, mode: 'fresh' }
+  if (mode === 'resume' && session.resume) return { args: [...session.resume, ...info.args], mode: 'resume' }
+  return { args: [...session.fresh, ...info.args], mode: 'fresh' }
+}

@@ -49,7 +49,9 @@ test('setup → agent grid → add/remove → restored on relaunch', async () =>
   await expect.poll(() => output(app, tiles.first())).toContain(`fake agent in ${project}`)
 
   // Agents run inline, off the alternate screen, so their output stays in the terminal's scrollback.
-  await expect.poll(() => output(app, tiles.first())).toContain('args=[] no-alt-screen-env=[1]')
+  // A new Claude starts on a session named after its agent id, so it can resume exactly that one.
+  const firstId = await tiles.first().getAttribute('data-agent-id')
+  await expect.poll(() => output(app, tiles.first())).toContain(`args=[--session-id ${firstId}] no-alt-screen-env=[1]`)
   await expect.poll(() => output(app, tiles.nth(2))).toContain('args=[--no-alt-screen] no-alt-screen-env=[]')
 
   // Input reaches the right pty only.

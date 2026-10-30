@@ -78,6 +78,38 @@ function notify(input: AttentionNotice): void {
   shown.show()
 }
 
+/** How many agents are working, as last reported by the window. */
+let workingCount = 0
+/** Set once the user agreed to stop working agents (or none were working), so nobody asks twice. */
+let stopConfirmed = false
+
+/**
+ * Quitting or closing the window stops every agent. With some still working, ask first. e2e tests
+ * answer through `__squadstormQuitAnswer` (0 quit, 1 cancel; quit by default) and count the questions.
+ */
+function confirmStop(): boolean {
+  if (stopConfirmed || workingCount === 0) return true
+  const message = `${workingCount} agent${workingCount === 1 ? ' is' : 's are'} still working`
+  let answer: number
+  if (process.env.SQUADSTORM_E2E) {
+    const hooks = globalThis as { __squadstormQuitAsked?: number; __squadstormQuitAnswer?: number }
+    hooks.__squadstormQuitAsked = (hooks.__squadstormQuitAsked ?? 0) + 1
+    answer = hooks.__squadstormQuitAnswer ?? 0
+  } else {
+    const options = {
+      type: 'warning' as const,
+      buttons: ['Quit', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      message,
+      detail: 'Quitting stops them in the middle of their work. Their conversations resume next time.'
+    }
+    answer = mainWindow ? dialog.showMessageBoxSync(mainWindow, options) : dialog.showMessageBoxSync(options)
+  }
+  stopConfirmed = answer === 0
+  return stopConfirmed
+}
+
 function setBadge(count: unknown): void {
   const text = Number.isInteger(count) && (count as number) > 0 ? String(count) : ''
   if (process.env.SQUADSTORM_E2E) Object.assign(globalThis, { __squadstormBadge: text })
@@ -125,9 +157,16 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  mainWindow.on('close', (e) => {
+    if (!confirmStop()) e.preventDefault()
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
     setBadge(0)
+    // A new window starts over: its agents get the question again.
+    stopConfirmed = false
+    workingCount = 0
   })
 }
 
@@ -195,6 +234,9 @@ function registerIpc(): void {
 
   ipcMain.on('attention:notify', (_e, notice: AttentionNotice) => notify(notice))
   ipcMain.on('attention:badge', (_e, count: unknown) => setBadge(count))
+  ipcMain.on('attention:working', (_e, count: unknown) => {
+    workingCount = Number.isInteger(count) && (count as number) > 0 ? (count as number) : 0
+  })
 
   ipcMain.handle('pty:spawn', (_e, req: SpawnRequest) => ptys.spawn(req))
   ipcMain.handle('pty:kill', (_e, id: string) => ptys.kill(id))
@@ -216,7 +258,11 @@ app.whenReady().then(() => {
   })
 })
 
-app.on('before-quit', () => {
+app.on('before-quit', (e) => {
+  if (!confirmStop()) {
+    e.preventDefault()
+    return
+  }
   ptys.killAll()
   fileWatchers.closeAll()
 })

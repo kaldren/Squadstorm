@@ -58,6 +58,7 @@ const api: SquadstormApi = {
   attention: {
     notify: (notice) => ipcRenderer.send('attention:notify', notice),
     badge: (count) => ipcRenderer.send('attention:badge', count),
+    working: (count) => ipcRenderer.send('attention:working', count),
     onClicked: (listener) => {
       const handler = (_e: IpcRendererEvent, agentId: string) => listener(agentId)
       ipcRenderer.on('attention:clicked', handler)

@@ -2,7 +2,7 @@ import type { FileEntry, ReadResult } from './files'
 import type { SearchQuery, SearchResult } from './search'
 import type { Commit, DiffSides, FileChange, GitStatus, LineStats } from './git'
 import type { AgentWorktree, AppState } from './types'
-import type { Provider } from './providers'
+import type { LaunchMode, Provider } from './providers'
 
 export interface SpawnRequest {
   id: string
@@ -10,6 +10,10 @@ export interface SpawnRequest {
   cwd: string
   cols: number
   rows: number
+  /** Resume the agent's previous conversation, or start a new one. */
+  mode: LaunchMode
+  /** No other agent of the same CLI runs in `cwd` (Codex can only resume then). */
+  soleInFolder: boolean
 }
 
 export interface SpawnResult {
@@ -124,6 +128,8 @@ export interface SquadstormApi {
     /** How many agents are waiting, shown on the dock icon (0 clears it). */
     badge(count: number): void
     onClicked(listener: (agentId: string) => void): () => void
+    /** How many agents are working: quitting while some are asks first. */
+    working(count: number): void
   }
   pty: {
     spawn(req: SpawnRequest): Promise<SpawnResult>

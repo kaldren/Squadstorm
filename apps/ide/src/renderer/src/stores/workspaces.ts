@@ -61,6 +61,8 @@ interface WorkspacesStore extends AppState {
   setIsolate(workspaceId: string, isolate: boolean): void
   addAgent(workspaceId: string, provider: Provider): void
   removeAgent(workspaceId: string, agentId: string): Promise<void>
+  /** Remembers that an agent has run, so the next launch resumes its conversation. */
+  markStarted(workspaceId: string, agentId: string): void
   moveAgent(workspaceId: string, agentId: string, toIndex: number): void
 }
 
@@ -263,6 +265,13 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
       updateWorkspace(workspaceId, (w) => ({
         ...w,
         agents: w.agents.filter((a) => a.id !== agentId)
+      }))
+    },
+
+    markStarted(workspaceId, agentId) {
+      updateWorkspace(workspaceId, (w) => ({
+        ...w,
+        agents: w.agents.map((a) => (a.id === agentId && !a.started ? { ...a, started: true } : a))
       }))
     },
 

@@ -15,6 +15,8 @@ export interface AgentConfig {
   label: string
   /** Set when the agent works in its own worktree instead of the workspace folder. */
   worktree?: AgentWorktree
+  /** It has run before, so the next launch resumes its conversation. */
+  started?: boolean
 }
 
 export interface Workspace {

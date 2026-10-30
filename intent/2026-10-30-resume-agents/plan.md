@@ -64,3 +64,8 @@ Step 2, changing launch arguments for real CLIs. Before wiring it in, the plan's
 - All → `pnpm typecheck && pnpm test && pnpm test:e2e` output in the PR
 
 ## Deviations
+- 2026-10-30 — Checked the real CLIs before wiring (Claude Code 2.1.314, print mode): `--session-id <uuid>` then `--resume <uuid>` brings the conversation back; resuming an unknown id prints "No conversation found…" and exits 1 within a second (what the fallback relies on); reusing a `--session-id` that already has a conversation is refused ("already in use"), so the fallback only starts fresh with the same id when there is no conversation to clash with. `codex resume --last` parses; its interactive behaviour without a prior session isn't checked (a failure there takes the same fallback).
+- 2026-10-30 — `launchArgs` returns the mode it actually used, so a Codex agent that shares its folder never takes the resume fallback path.
+- 2026-10-30 — After quitting is confirmed once, closing the window doesn't ask again; a new window starts over.
+- 2026-10-30 — The quit e2e checks "no question once quiet" by keeping Cancel as the e2e answer: the app can only close if nobody asked.
+
