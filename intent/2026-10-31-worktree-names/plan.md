@@ -1,6 +1,6 @@
 # Plan: Name an agent's worktree branch
 
-From: intent.md + spec.md in intent/2026-10-31-worktree-names/. Status: draft.
+From: intent.md + spec.md in intent/2026-10-31-worktree-names/. Status: Accepted.
 Written without changing any code.
 
 ## Files that change
