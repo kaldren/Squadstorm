@@ -233,6 +233,24 @@ test('a taken name is refused', async () => {
   await expect(s.page.getByTestId('branch-name')).toHaveValue('taken')
   await expect(tiles).toHaveCount(1)
 
+  // A branch that only exists on a remote (pushed for a PR, then deleted locally) is taken too, and
+  // so is a name with branches nested under it.
+  git(project, 'update-ref', 'refs/remotes/origin/squadstorm/shipped', 'HEAD')
+  git(project, 'branch', 'squadstorm/nested/inside')
+  for (const name of ['shipped', 'nested']) {
+    await s.page.getByTestId('branch-name').fill(name)
+    await s.page.getByTestId('branch-name').press('Enter')
+    await expect(s.page.getByTestId('branch-name-error')).toContainText('already exists')
+  }
+  await expect(tiles).toHaveCount(1)
+
+  // The main process refuses it on its own too, whatever the renderer checked.
+  const refused = await s.page.evaluate(
+    (root) => (window as any).api.worktrees.add(root, 'Claude 9', 'taken').then(() => 'created', (e: Error) => e.message),
+    project
+  )
+  expect(refused).toContain('A branch named squadstorm/taken already exists')
+
   // A name with nothing usable is refused before asking git.
   await s.page.getByTestId('branch-name').fill('!!!')
   await s.page.getByTestId('branch-name').press('Enter')
@@ -244,6 +262,7 @@ test('a taken name is refused', async () => {
   await expect(tiles).toHaveCount(1)
   expect(git(project, 'branch', '--list', 'squadstorm/*', '--format=%(refname:short)').trim().split('\n')).toEqual([
     expect.stringMatching(/^squadstorm\/claude-1-[0-9a-f]{4}$/),
+    'squadstorm/nested/inside',
     'squadstorm/taken'
   ])
 
