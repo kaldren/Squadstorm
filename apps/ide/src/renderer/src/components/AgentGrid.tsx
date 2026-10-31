@@ -1,5 +1,6 @@
 import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { evenSplit, gridRows, resizeSplit } from '@shared/layout'
+import { soleInFolder } from '@shared/sessions'
 import type { Workspace } from '@shared/types'
 import { useAttention } from '../stores/attention'
 import { useWorkspaces } from '../stores/workspaces'
@@ -34,6 +35,8 @@ function gapAfter(fracs: number[], i: number): string {
 export function AgentGrid({ workspace, hidden }: { workspace: Workspace; hidden: boolean }) {
   const removeAgent = useWorkspaces((s) => s.removeAgent)
   const moveAgent = useWorkspaces((s) => s.moveAgent)
+  const pendingWorktrees = useWorkspaces((s) => s.pendingWorktrees)
+  const workspaces = useWorkspaces((s) => s.workspaces)
   const [maximizedId, setMaximizedId] = useState<string | null>(null)
   // An agent asked to take focus (its notification was clicked) can't hide behind a maximized tile.
   const focusRequest = useAttention((s) => s.focusRequest)
@@ -108,38 +111,50 @@ export function AgentGrid({ workspace, hidden }: { workspace: Workspace; hidden:
             const hidden = maximized !== null && agent.id !== maximized
             return (
               <div key={agent.id} className={`${hidden ? 'hidden' : 'flex'} absolute`} style={tileStyle(index)}>
-                <AgentTerminal
-                  agent={agent}
-                  cwd={workspace.path}
-                  workspaceName={workspace.name}
-                  // Other tiles are hidden rather than unmounted so their terminals keep running.
-                  maximized={agent.id === maximized}
-                  hidden={hidden}
-                  onMaximize={() => setMaximizedId(agent.id)}
-                  onRestore={() => setMaximizedId(null)}
-                  onClose={() => removeAgent(workspace.id, agent.id)}
-                  // Reordering moves the existing DOM nodes, so terminals and their ptys survive it.
-                  reorder={
-                    maximized
-                      ? null
-                      : {
-                          dragging: agent.id === draggingId,
-                          dropTarget: draggingId !== null && agent.id === dropTargetId && agent.id !== draggingId,
-                          onDragStart: () => setDraggingId(agent.id),
-                          onDragEnd: endDrag,
-                          onDragOver: () => {
-                            if (draggingId === null) return false
-                            setDropTargetId(agent.id)
-                            return true
-                          },
-                          onDragLeave: () => setDropTargetId((id) => (id === agent.id ? null : id)),
-                          onDrop: () => {
-                            if (draggingId !== null) moveAgent(workspace.id, draggingId, index)
-                            endDrag()
+                {pendingWorktrees.has(agent.id) ? (
+                  <div
+                    className="flex flex-1 items-center justify-center rounded-lg border border-line bg-bg text-xs text-muted"
+                    data-testid="agent-pending"
+                  >
+                    Creating a worktree for {agent.label}…
+                  </div>
+                ) : (
+                  <AgentTerminal
+                    agent={agent}
+                    cwd={agent.worktree?.path ?? workspace.path}
+                    workspaceId={workspace.id}
+                    workspacePath={workspace.path}
+                    workspaceName={workspace.name}
+                    soleInFolder={soleInFolder(agent, workspaces)}
+                    // Other tiles are hidden rather than unmounted so their terminals keep running.
+                    maximized={agent.id === maximized}
+                    hidden={hidden}
+                    onMaximize={() => setMaximizedId(agent.id)}
+                    onRestore={() => setMaximizedId(null)}
+                    onClose={() => removeAgent(workspace.id, agent.id)}
+                    // Reordering moves the existing DOM nodes, so terminals and their ptys survive it.
+                    reorder={
+                      maximized
+                        ? null
+                        : {
+                            dragging: agent.id === draggingId,
+                            dropTarget: draggingId !== null && agent.id === dropTargetId && agent.id !== draggingId,
+                            onDragStart: () => setDraggingId(agent.id),
+                            onDragEnd: endDrag,
+                            onDragOver: () => {
+                              if (draggingId === null) return false
+                              setDropTargetId(agent.id)
+                              return true
+                            },
+                            onDragLeave: () => setDropTargetId((id) => (id === agent.id ? null : id)),
+                            onDrop: () => {
+                              if (draggingId !== null) moveAgent(workspace.id, draggingId, index)
+                              endDrag()
+                            }
                           }
-                        }
-                  }
-                />
+                    }
+                  />
+                )}
               </div>
             )
           })}

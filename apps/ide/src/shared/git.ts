@@ -124,3 +124,35 @@ export function parseNameStatus(out: string): FileChange[] {
   }
   return changes
 }
+
+/** Lines added and removed in a file; null for binary files. */
+export interface LineStats {
+  added: number | null
+  removed: number | null
+}
+
+/**
+ * Parses `git diff --numstat -z`: `added\tremoved\tpath\0`, or for a rename `added\tremoved\t\0from\0to\0`.
+ * Binary files show `-` for both counts. Keyed by the (new) path.
+ */
+export function parseNumstat(out: string): Record<string, LineStats> {
+  const fields = out.split('\0')
+  const stats: Record<string, LineStats> = {}
+  for (let i = 0; i < fields.length; i++) {
+    const m = fields[i].match(/^(\d+|-)\t(\d+|-)\t([\s\S]*)$/)
+    if (!m) continue
+    let path = m[3]
+    if (path === '') {
+      path = fields[i + 2] ?? ''
+      i += 2
+    }
+    if (!path) continue
+    stats[path] = { added: m[1] === '-' ? null : Number(m[1]), removed: m[2] === '-' ? null : Number(m[2]) }
+  }
+  return stats
+}
+
+/** The paths to commit for the selected changes: a rename brings its old path along. */
+export function commitPathspec(changes: FileChange[], selected: ReadonlySet<string>): string[] {
+  return changes.filter((c) => selected.has(c.path)).flatMap((c) => (c.from ? [c.from, c.path] : [c.path]))
+}

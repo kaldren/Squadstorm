@@ -21,6 +21,22 @@ export function Setup() {
   const [progress, setProgress] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [isolate, setIsolate] = useState(false)
+  // Worktrees need git: offered for clones, and for folders that are git repos on a branch with commits.
+  const [folderIsRepo, setFolderIsRepo] = useState(false)
+  useEffect(() => {
+    setFolderIsRepo(false)
+    if (!path) return
+    let live = true
+    Promise.all([window.api.git.status(path), window.api.git.log(path)]).then(
+      ([s, log]) => live && setFolderIsRepo(s.repo && s.branch !== null && log.length > 0),
+      () => live && setFolderIsRepo(false)
+    )
+    return () => {
+      live = false
+    }
+  }, [path])
+  const canIsolate = source === 'github' || folderIsRepo
 
   const total = PROVIDER_IDS.reduce((sum, p) => sum + counts[p], 0)
   const canCancel = workspaces.length > 0
@@ -36,13 +52,13 @@ export function Setup() {
     setError(null)
     try {
       if (source === 'folder') {
-        await createWorkspace({ path: path!, counts })
+        await createWorkspace({ path: path!, counts, isolate: canIsolate && isolate })
       } else {
         setProgress('Cloning…')
         const unsubscribe = window.api.github.onCloneProgress(setProgress)
         try {
           const clone = await window.api.github.clone(repoInput)
-          await createWorkspace({ path: clone.path, counts, repo: repoFullName(repo!) })
+          await createWorkspace({ path: clone.path, counts, repo: repoFullName(repo!), isolate })
         } finally {
           unsubscribe()
         }
@@ -133,6 +149,25 @@ export function Setup() {
             <RepoPicker value={repoInput} onChange={setRepoInput} disabled={busy} />
           )}
         </div>
+
+        {canIsolate && (
+          <label className="mt-4 flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              data-testid="isolate"
+              className="mt-0.5 accent-accent"
+              checked={isolate}
+              disabled={busy}
+              onChange={(e) => setIsolate(e.target.checked)}
+            />
+            <span>
+              Give each agent its own worktree
+              <span className="block text-[11px] text-muted">
+                Each agent works on its own branch in its own folder, so parallel tasks never touch each other.
+              </span>
+            </span>
+          </label>
+        )}
 
         {progress && (
           <p
