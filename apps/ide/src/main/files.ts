@@ -1,5 +1,5 @@
 import { watch, type FSWatcher } from 'node:fs'
-import { open, readdir, stat, writeFile } from 'node:fs/promises'
+import { open, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { isHidden, isSearched, isWatched, sortEntries, type FileEntry, type ReadResult } from '@shared/files'
 
@@ -62,6 +62,24 @@ export async function readText(root: string, path: string): Promise<ReadResult> 
 
 export async function writeText(root: string, path: string, content: string): Promise<void> {
   await writeFile(resolveInside(root, path), content)
+}
+
+/**
+ * Writes `content` only if the file still holds exactly `expected` (null: doesn't exist), as UTF-8
+ * text. Used where a stale view would otherwise overwrite something an agent just wrote.
+ */
+export async function writeTextIfUnchanged(root: string, path: string, expected: string | null, content: string): Promise<void> {
+  const full = resolveInside(root, path)
+  const buffer = await readFile(full).catch((e: NodeJS.ErrnoException) => {
+    if (e.code === 'ENOENT') return null
+    throw e
+  })
+  const current = buffer?.toString('utf8') ?? null
+  if (buffer && !Buffer.from(current!, 'utf8').equals(buffer)) {
+    throw new Error(`${path} isn't UTF-8 text, so it can't be changed line by line. Discard the whole file instead.`)
+  }
+  if (current !== expected) throw new Error(`${path} changed on disk in the meantime, so nothing was written. Look again and retry.`)
+  await writeFile(full, content)
 }
 
 /**

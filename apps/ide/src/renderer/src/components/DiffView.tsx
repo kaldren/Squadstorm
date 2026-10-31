@@ -2,10 +2,33 @@ import { useEffect, useRef, useState } from 'react'
 import { LanguageDescription } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import { unifiedMergeView } from '@codemirror/merge'
-import { EditorState } from '@codemirror/state'
+import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView, lineNumbers } from '@codemirror/view'
 import type { Commit, FileChange } from '@shared/git'
+import { sendKeymap } from '../sendKeymap'
 import { editorTheme } from './CodeEditor'
+
+/** The read-only unified diff setup shared by the diff and review views. */
+export function diffExtensions(
+  original: string,
+  lang: Extension | null,
+  mergeControls: Parameters<typeof unifiedMergeView>[0]['mergeControls'] = false
+): Extension[] {
+  return [
+    lineNumbers(),
+    // Read-only but focusable, so text can be selected and sent to an agent (⌘L).
+    EditorState.readOnly.of(true),
+    unifiedMergeView({ original, mergeControls, gutter: true }),
+    ...editorTheme,
+    lang ?? []
+  ]
+}
+
+/** The language support for a file name, if CodeMirror has one. */
+export const languageFor = (path: string) =>
+  LanguageDescription.matchFilename(languages, path.split('/').pop() ?? path)
+    ?.load()
+    .catch(() => null) ?? Promise.resolve(null)
 
 interface Props {
   root: string
@@ -13,14 +36,18 @@ interface Props {
   /** Show what this commit did to the file instead of the uncommitted change. */
   commit?: Commit
   onOpenFile(path: string): void
+  /** ⌘L: send these lines of the file (or all of it) to an agent. */
+  onSend?(path: string, from?: number, to?: number): void
 }
 
 /**
  * Read-only unified diff of a file against HEAD, following the file as it changes on disk;
  * or, for a commit, of the file before and after that commit.
  */
-export function DiffView({ root, change, commit, onOpenFile }: Props) {
+export function DiffView({ root, change, commit, onOpenFile, onSend }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
+  const sendRef = useRef(onSend)
+  sendRef.current = onSend
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -32,8 +59,7 @@ export function DiffView({ root, change, commit, onOpenFile }: Props) {
         const { original, modified } = commit
           ? await window.api.git.commitDiff(root, commit.hash, change.path, change.from)
           : await window.api.git.diff(root, change.path, change.from)
-        const name = change.path.split('/').pop() ?? change.path
-        const lang = await LanguageDescription.matchFilename(languages, name)?.load().catch(() => null)
+        const lang = await languageFor(change.path)
         if (cancelled) return
         const scrollTop = view?.scrollDOM.scrollTop ?? 0
         view?.destroy()
@@ -41,13 +67,10 @@ export function DiffView({ root, change, commit, onOpenFile }: Props) {
           parent: hostRef.current!,
           state: EditorState.create({
             doc: modified,
+            // Only the working tree's version can be sent: the agent reads the file as it is now.
             extensions: [
-              lineNumbers(),
-              EditorState.readOnly.of(true),
-              EditorView.editable.of(false),
-              unifiedMergeView({ original, mergeControls: false, gutter: true }),
-              ...editorTheme,
-              lang ?? []
+              ...diffExtensions(original, lang),
+              commit || change.kind === 'D' ? [] : sendKeymap((from, to) => sendRef.current?.(change.path, from, to))
             ]
           })
         })

@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type IDisposable, type ILink } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { ActivityTracker, type Activity } from '@shared/activity'
 import { nextWaiting } from '@shared/attention'
+import { bracketedPaste, cellRange, findPathLinks, findUrlLinks, logicalLine, quotePath } from '@shared/links'
 import { PROVIDERS } from '@shared/providers'
 import type { AgentConfig } from '@shared/types'
 import { attachPty } from '../ptyBus'
+import { openFileIndex } from '../fileIndex'
 import { useAttention } from '../stores/attention'
 import { useWorkspaces } from '../stores/workspaces'
 
 type Status = 'starting' | 'running' | 'exited' | 'error'
+
+/** A link can span at most this many wrapped rows (keeps matching bounded on huge lines). */
+const MAX_WRAPPED_ROWS = 24
 
 const THEME = {
   background: '#0e0f12',
@@ -38,6 +43,8 @@ interface Props {
   workspacePath: string
   /** Named in notifications. */
   workspaceName: string
+  /** No other agent of the same CLI runs in this tile's folder, so its last session is its own. */
+  soleInFolder: boolean
   maximized: boolean
   hidden: boolean
   onMaximize(): void
@@ -53,6 +60,7 @@ export function AgentTerminal({
   workspaceId,
   workspacePath,
   workspaceName,
+  soleInFolder,
   maximized,
   hidden,
   onMaximize,
@@ -74,6 +82,9 @@ export function AgentTerminal({
   // Notification text uses the latest names without restarting the terminal.
   const namesRef = useRef({ label: agent.label, workspaceName })
   namesRef.current = { label: agent.label, workspaceName }
+  // Read when (re)starting, without restarting the terminal when they change.
+  const launchRef = useRef({ started: !!agent.started, soleInFolder, sessionId: agent.sessionId ?? agent.id })
+  launchRef.current = { started: !!agent.started, soleInFolder, sessionId: agent.sessionId ?? agent.id }
   const focusRequest = useAttention((s) => s.focusRequest)
 
   useEffect(() => {
@@ -190,17 +201,27 @@ export function AgentTerminal({
     const start = async () => {
       attached = false
       setStatus('starting')
+      const { started, soleInFolder: sole, sessionId } = launchRef.current
       const result = await window.api.pty.spawn({
         id: agent.id,
         provider: agent.provider,
         cwd,
         cols: term.cols,
-        rows: term.rows
+        rows: term.rows,
+        // An agent that ran before picks its conversation back up: after a relaunch, and on Restart.
+        mode: started ? 'resume' : 'fresh',
+        soleInFolder: sole,
+        sessionId,
+        nextSessionId: crypto.randomUUID()
       })
       if (result.error) {
         setStatus('error')
         term.write(`\x1b[31m${result.error}\x1b[0m\r\n`)
         return
+      }
+      if (!started) {
+        launchRef.current.started = true
+        useWorkspaces.getState().markStarted(workspaceId, agent.id)
       }
       if (result.backlog) {
         replaying = true
@@ -221,6 +242,14 @@ export function AgentTerminal({
       void start()
     }
     void start()
+
+    const links = registerLinks(term, agent.id, cwd)
+    // Its old session couldn't be resumed and it started over on a new one: resume that one next time.
+    const offSession = window.api.pty.onSession((id, sessionId) => {
+      if (id !== agent.id) return
+      launchRef.current.sessionId = sessionId
+      useWorkspaces.getState().setSessionId(agent.id, sessionId)
+    })
 
     const input = term.onData((data) => {
       tracker.input(Date.now())
@@ -244,6 +273,8 @@ export function AgentTerminal({
       resize.dispose()
       bell.dispose()
       osc.dispose()
+      links.dispose()
+      offSession()
       useAttention.getState().remove(agent.id)
       written.dispose()
       bufferChange.dispose()
@@ -278,11 +309,18 @@ export function AgentTerminal({
       data-focused={focused || undefined}
       onFocus={() => {
         setFocused(true)
+        useAttention.setState({ lastFocused: agent.id })
         evaluateRef.current()
       }}
       onBlur={() => setFocused(false)}
       onMouseDown={() => termRef.current?.focus()}
       onDragOver={(e) => {
+        // Files from Finder: their paths go into the prompt.
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'copy'
+          return
+        }
         if (!reorder?.onDragOver()) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'move'
@@ -291,6 +329,13 @@ export function AgentTerminal({
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) reorder?.onDragLeave()
       }}
       onDrop={(e) => {
+        if (e.dataTransfer.files.length > 0) {
+          e.preventDefault()
+          const paths = [...e.dataTransfer.files].map((f) => window.api.pathForFile(f)).filter(Boolean)
+          if (paths.length > 0) window.api.pty.write(agent.id, bracketedPaste(`${paths.map(quotePath).join(' ')} `))
+          termRef.current?.focus()
+          return
+        }
         if (!reorder) return
         e.preventDefault()
         reorder.onDrop()
@@ -364,6 +409,82 @@ export function AgentTerminal({
       </div>
     </div>
   )
+}
+
+/**
+ * Makes ⌘-click open relative file paths printed by the agent (when they exist under its folder) in
+ * the Code view, at their line, and http(s) URLs in the browser.
+ */
+function registerLinks(term: Terminal, agentId: string, cwd: string): IDisposable {
+  // Paths become links only when they exist in the agent's folder.
+  const files = openFileIndex(cwd)
+
+  /** The rows of the logical line through row `y` (1-based), wrapped rows included, capped. */
+  const logicalRows = (y: number) => {
+    const buffer = term.buffer.active
+    let first = y - 1
+    while (first > 0 && buffer.getLine(first)?.isWrapped && y - 1 - first < MAX_WRAPPED_ROWS) first--
+    let last = y - 1
+    while (buffer.getLine(last + 1)?.isWrapped && last - first < MAX_WRAPPED_ROWS) last++
+    const rows = []
+    for (let i = first; i <= last; i++) {
+      const line = buffer.getLine(i)
+      if (!line) continue
+      const cells = []
+      for (let x = 0; x < line.length; x++) {
+        const cell = line.getCell(x)
+        cells.push({ chars: cell?.getChars() ?? '', width: cell?.getWidth() ?? 1 })
+      }
+      rows.push({ y: i + 1, cells })
+    }
+    return rows
+  }
+
+  const withMeta = (event: MouseEvent, open: () => void) => event.metaKey && open()
+
+  const provideLinks = (y: number): ILink[] => {
+    const { text, positions } = logicalLine(logicalRows(y))
+    const link = (start: number, end: number, label: string, activate: () => void): ILink => ({
+      range: cellRange(positions, start, end),
+      text: label,
+      decorations: { pointerCursor: true, underline: true },
+      activate: (event) => withMeta(event, activate)
+    })
+    const paths = findPathLinks(text)
+      .filter((l) => files.has(l.path))
+      .map((l) =>
+        link(l.start, l.end, text.slice(l.start, l.end), () =>
+          useWorkspaces.getState().requestOpen({ root: cwd, path: l.path, line: l.line, column: l.column })
+        )
+      )
+    // The window-open handler in main sends http(s) to the browser and opens nothing in the app.
+    const urls = findUrlLinks(text).map((l) => link(l.start, l.end, l.url, () => void window.open(l.url)))
+    // xterm asks row by row; answer with the links that touch this row.
+    return [...paths, ...urls].filter((l) => l.range.start.y <= y && y <= l.range.end.y)
+  }
+
+  const provider = term.registerLinkProvider({ provideLinks: (y, callback) => callback(provideLinks(y)) })
+
+  // Terminal text is drawn on a canvas, so e2e tests reach the links of a line through this hook.
+  const hooks = ((window as unknown as Record<string, unknown>).__squadstormLinks ??= {}) as Record<string, unknown>
+  hooks[agentId] = {
+    ready: () => files.has('') !== null,
+    find: (text: string) => {
+      const buffer = term.buffer.active
+      for (let y = 1; y <= buffer.length; y++) {
+        if (buffer.getLine(y - 1)?.translateToString(true).includes(text)) return provideLinks(y)
+      }
+      return []
+    }
+  }
+
+  return {
+    dispose() {
+      provider.dispose()
+      files.dispose()
+      delete hooks[agentId]
+    }
+  }
 }
 
 const ipcMessage = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
