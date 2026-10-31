@@ -1,4 +1,4 @@
-import { _electron as electron, expect, test } from '@playwright/test'
+import { _electron as electron, expect, type Locator, test } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -285,13 +285,8 @@ test('code view: ⌘⇧F searches file contents and jumps to matches', async () 
   await app.close()
 })
 
-test('code view: long lines wrap to the editor width', async () => {
+const openCode = async (project: string) => {
   const userData = mkdtempSync(join(tmpdir(), 'squadstorm-e2e-data-'))
-  const project = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-project-')))
-  const long = Array.from({ length: 200 }, (_, i) => `word${i}`).join(' ')
-  const content = `first\n${long}\nlast\n`
-  writeFileSync(join(project, 'notes.txt'), content)
-
   const app = await electron.launch({
     args: ['.'],
     env: { ...process.env, SQUADSTORM_E2E: '1', SQUADSTORM_USER_DATA: userData, SQUADSTORM_AGENT_CMD: 'exec cat' }
@@ -303,31 +298,98 @@ test('code view: long lines wrap to the editor width', async () => {
   await page.getByTestId('pick-folder').click()
   await page.getByTestId('start').click()
   await expect(page.getByTestId('agent-tile')).toHaveCount(1)
-
   await page.getByRole('tab', { name: 'Code' }).click()
+  return { app, page }
+}
+
+test('code view: long lines wrap to the editor width', async () => {
+  const project = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-project-')))
+  const long = Array.from({ length: 200 }, (_, i) => `word${i}`).join(' ')
+  const content = `first\n${long}\nlast\n`
+  writeFileSync(join(project, 'notes.txt'), content)
+  const { app, page } = await openCode(project)
+
   await page.getByTestId('file-entry').filter({ hasText: 'notes.txt' }).click()
-  const editor = page.locator('.cm-content')
+  const code = page.getByTestId('code-editor')
+  const editor = code.locator('.cm-content')
   await expect(editor).toContainText('word199')
 
   // Nothing to scroll sideways, and the long line takes several rows.
-  const scroller = page.locator('.cm-scroller')
-  const { scrollWidth, clientWidth } = await scroller.evaluate((el) => ({
+  const { scrollWidth, clientWidth } = await code.locator('.cm-scroller').evaluate((el) => ({
     scrollWidth: el.scrollWidth,
     clientWidth: el.clientWidth
   }))
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth)
-  const rows = await page
-    .locator('.cm-line')
+  const lines = code.locator('.cm-line')
+  const rows = await lines
     .nth(1)
     .evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)))
   expect(rows).toBeGreaterThan(1)
-  // Still one real line (first, long, last, and the empty one after the final newline), and saving
-  // writes the file unchanged.
-  await expect(page.locator('.cm-line')).toHaveCount(4)
+
+  // Still one real line: four lines (the last one empty), and number 3 sits beside "last", below the wrapped rows.
+  await expect(lines).toHaveCount(4)
+  const top = (l: Locator) => l.evaluate((el) => el.getBoundingClientRect().top)
+  const three = code.locator('.cm-lineNumbers .cm-gutterElement').getByText('3', { exact: true })
+  expect(Math.abs((await top(three)) - (await top(lines.nth(2))))).toBeLessThan(2)
+
+  // Wrapping is only on screen: an edit saves as one line plus the edit, with no breaks added.
   await editor.click()
+  await page.keyboard.press('Meta+ArrowDown')
+  await page.keyboard.type('end')
+  await expect(page.getByTestId('dirty-dot')).toHaveCount(1)
   await page.keyboard.press('Meta+s')
-  await expect.poll(() => readFileSync(join(project, 'notes.txt'), 'utf8')).toBe(content)
+  await expect(page.getByTestId('dirty-dot')).toHaveCount(0)
+  await expect.poll(() => readFileSync(join(project, 'notes.txt'), 'utf8')).toBe(`${content}end`)
   await page.screenshot({ path: 'test-results/code-wrap.png' })
+
+  await app.close()
+})
+
+test('code view: a wrapped file reopens where it was scrolled to', async () => {
+  const project = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-project-')))
+  // Paragraphs of uneven length, so line heights can't be guessed before they are measured.
+  const paragraphs = Array.from({ length: 300 }, (_, i) => {
+    const words = 5 + ((i * 37) % 120)
+    return `P${i} ` + Array.from({ length: words }, (_, w) => 'x'.repeat(1 + ((i + w * 7) % 13))).join(' ')
+  })
+  writeFileSync(join(project, 'long.txt'), paragraphs.join('\n') + '\n')
+  writeFileSync(join(project, 'other.txt'), 'other\n')
+  const { app, page } = await openCode(project)
+
+  await page.getByTestId('file-entry').filter({ hasText: 'long.txt' }).click()
+  const code = page.getByTestId('code-editor')
+  await expect(code.locator('.cm-content')).toContainText('P0 ')
+  const scroller = code.locator('.cm-scroller')
+  /** The paragraph at the top of the editor. */
+  const topParagraph = () =>
+    scroller.evaluate((el) => {
+      const top = el.getBoundingClientRect().top
+      const line = [...el.querySelectorAll('.cm-line')].find((l) => l.getBoundingClientRect().bottom > top + 1)
+      return line?.textContent?.split(' ')[0]
+    })
+
+  // Scroll down the way a reader does, so the editor measures every paragraph on the way.
+  await scroller.evaluate(async (el) => {
+    const frame = () => new Promise((r) => requestAnimationFrame(r))
+    while (el.scrollTop < el.scrollHeight * 0.7) {
+      el.scrollTop += el.clientHeight / 2
+      await frame()
+      await frame()
+    }
+  })
+  await expect.poll(topParagraph).toMatch(/^P\d+$/)
+  // Let the editor measure what came into view; the top paragraph settles.
+  await page.waitForTimeout(300)
+  const before = await topParagraph()
+  expect(before).not.toBe('P0')
+
+  await page.getByTestId('file-entry').filter({ hasText: 'other.txt' }).click()
+  await expect(code.locator('.cm-content')).toHaveText('other')
+  await page.getByTestId('editor-tab').filter({ hasText: 'long.txt' }).click()
+  await expect.poll(topParagraph).toBe(before)
+  // And it stays there once the editor has measured what is on screen.
+  await page.waitForTimeout(300)
+  expect(await topParagraph()).toBe(before)
 
   await app.close()
 })
