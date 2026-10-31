@@ -135,7 +135,8 @@ Adding a new agent CLI takes one entry in [`src/shared/providers.ts`](src/shared
 ```bash
 pnpm typecheck     # TypeScript
 pnpm test          # unit tests
-pnpm test:e2e      # builds the app and runs the Playwright suite
+pnpm test:e2e      # builds the app and runs the Playwright suite, invisibly
+                   # (SQUADSTORM_E2E_SHOW=1 pnpm test:e2e to watch it)
 ```
 
 CI runs the type check, the unit tests and the e2e suite on every pull request.
