@@ -118,7 +118,10 @@ export interface SquadstormApi {
   }
   /** Agent worktrees; `root` is always the workspace folder. */
   worktrees: {
-    add(root: string, label: string): Promise<AgentWorktree>
+    /** `name` is the typed branch name (without `squadstorm/`); without one the branch is named after `label`. */
+    add(root: string, label: string, name?: string): Promise<AgentWorktree>
+    /** Why a typed branch name can't be used here, or null when it can. */
+    checkName(root: string, name: string): Promise<string | null>
     inspect(root: string, worktree: AgentWorktree): Promise<WorktreeState>
     /** `force` discards uncommitted changes. */
     remove(root: string, worktree: AgentWorktree, force: boolean): Promise<{ branchKept: boolean }>

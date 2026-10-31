@@ -1,13 +1,33 @@
 import type { AgentWorktree } from './types'
 
-/** Lowercase letters, digits and dashes: safe in branch names and folder names. */
+/** Lowercase letters, digits and dashes, or '' when the text has none: safe in branch and folder names. */
+export function nameSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+/** Like `nameSlug`, but never empty. */
 export function slug(text: string): string {
-  return (
-    text
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'agent'
-  )
+  return nameSlug(text) || 'agent'
+}
+
+/** The longest branch name (after `squadstorm/`) a user may type. */
+export const MAX_NAME = 60
+
+/** Why a typed branch name can't be used, or null when it can (a blank name means "automatic"). */
+export function nameError(text: string): string | null {
+  if (!text.trim()) return null
+  const name = nameSlug(text)
+  if (!name) return 'Use letters or digits.'
+  if (name.length > MAX_NAME) return `Use at most ${MAX_NAME} characters.`
+  return null
+}
+
+/** `squadstorm/login-fix` for the typed name "Login fix". */
+export function namedBranch(text: string): string {
+  return `squadstorm/${nameSlug(text)}`
 }
 
 /** `squadstorm/claude-2-9f3a`: the agent's label plus a suffix that keeps re-used labels apart. */

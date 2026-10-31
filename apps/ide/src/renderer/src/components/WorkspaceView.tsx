@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { nextAgentLabel } from '@shared/layout'
 import { PROVIDERS, PROVIDER_IDS } from '@shared/providers'
+import type { Provider } from '@shared/providers'
 import type { Workspace } from '@shared/types'
-import { useWorkspaces, type View } from '../stores/workspaces'
+import { isolates, useWorkspaces, type View } from '../stores/workspaces'
 import { AgentGrid } from './AgentGrid'
+import { BranchNamePrompt } from './BranchNamePrompt'
 import { CodeView } from './CodeView'
 
 const VIEWS: { id: View; label: string }[] = [
@@ -48,6 +51,14 @@ export function WorkspaceView({ workspace, hidden }: { workspace: Workspace; hid
   const setView = useWorkspaces((s) => s.setView)
   const setCodeScope = useWorkspaces((s) => s.setCodeScope)
   const isolationBlocker = useIsolationBlocker(workspace.path)
+
+  // The provider whose + button is asking for a branch name. Leaving the Agents view or turning
+  // Own worktree off drops the question.
+  const [naming, setNaming] = useState<Provider | null>(null)
+  const closeNaming = useCallback(() => setNaming(null), [])
+  useEffect(() => {
+    if (view !== 'agents' || !workspace.isolate) setNaming(null)
+  }, [view, workspace.isolate])
 
   // A file to open in this workspace (a path clicked in an agent's output): show the Code view of
   // the folder it was clicked in; that view opens the file.
@@ -105,15 +116,28 @@ export function WorkspaceView({ workspace, hidden }: { workspace: Workspace; hid
           )}
           {view === 'agents' &&
             PROVIDER_IDS.map((p) => (
-              <button
-                key={p}
-                className="flex items-center gap-1.5 rounded-md border border-line bg-panel px-2.5 py-1 text-xs hover:bg-raised"
-                title={availability?.[p] ? (PROVIDERS[p].shell ? 'Add a terminal' : `Add a ${PROVIDERS[p].label} agent`) : `${PROVIDERS[p].command} not found on PATH`}
-                onClick={() => addAgent(workspace.id, p)}
-              >
-                <span className="h-2 w-2 rounded-full" style={{ background: PROVIDERS[p].color }} />+{' '}
-                {PROVIDERS[p].label}
-              </button>
+              <span key={p} className="relative">
+                <button
+                  className="flex items-center gap-1.5 rounded-md border border-line bg-panel px-2.5 py-1 text-xs hover:bg-raised"
+                  title={availability?.[p] ? (PROVIDERS[p].shell ? 'Add a terminal' : `Add a ${PROVIDERS[p].label} agent`) : `${PROVIDERS[p].command} not found on PATH`}
+                  // An isolated agent first asks for its branch name; everything else is added right away.
+                  onClick={() => (isolates(workspace, p) ? setNaming(naming === p ? null : p) : addAgent(workspace.id, p))}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ background: PROVIDERS[p].color }} />+{' '}
+                  {PROVIDERS[p].label}
+                </button>
+                {naming === p && (
+                  <BranchNamePrompt
+                    root={workspace.path}
+                    nextLabel={nextAgentLabel(workspace.agents, p)}
+                    onClose={closeNaming}
+                    onAdd={(name) => {
+                      setNaming(null)
+                      addAgent(workspace.id, p, name)
+                    }}
+                  />
+                )}
+              </span>
             ))}
           {view === 'code' && scopes.length > 1 && (
             <select

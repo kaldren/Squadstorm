@@ -60,7 +60,8 @@ interface WorkspacesStore extends AppState {
   setView(workspaceId: string, view: View): void
   setCodeScope(workspaceId: string, root: string): void
   setIsolate(workspaceId: string, isolate: boolean): void
-  addAgent(workspaceId: string, provider: Provider): void
+  /** `name` is the branch name typed for an isolated agent; without one it's named automatically. */
+  addAgent(workspaceId: string, provider: Provider, name?: string): void
   removeAgent(workspaceId: string, agentId: string): Promise<void>
   /** Remembers that an agent has run, so the next launch resumes its conversation. */
   markStarted(workspaceId: string, agentId: string): void
@@ -82,7 +83,7 @@ function buildAgents(counts: Record<Provider, number>): AgentConfig[] {
 }
 
 /** Whether a new agent of this provider gets a worktree in this workspace. Terminals never do. */
-const isolates = (workspace: Workspace, provider: Provider) => !!workspace.isolate && !PROVIDERS[provider].shell
+export const isolates = (workspace: Workspace, provider: Provider) => !!workspace.isolate && !PROVIDERS[provider].shell
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -145,7 +146,7 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
 
   /** Creates the worktrees of pending agents one at a time (git locks its worktree list). */
   let queue = Promise.resolve()
-  const provision = (workspaceId: string, agentId: string) => {
+  const provision = (workspaceId: string, agentId: string, name?: string) => {
     setPending(agentId, true)
     queue = queue
       .then(async () => {
@@ -153,7 +154,7 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
         const agent = workspace?.agents.find((a) => a.id === agentId)
         if (!workspace || !agent) return
         try {
-          const worktree = await window.api.worktrees.add(workspace.path, agent.label)
+          const worktree = await window.api.worktrees.add(workspace.path, agent.label, name)
           // The agent or its workspace went away meanwhile: don't leave the new worktree behind.
           if (!agentExists(workspaceId, agentId)) {
             await window.api.worktrees.remove(workspace.path, worktree, false).catch(() => {})
@@ -249,14 +250,14 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
 
     setIsolate: (workspaceId, isolate) => updateWorkspace(workspaceId, (w) => ({ ...w, isolate: isolate || undefined })),
 
-    addAgent(workspaceId, provider) {
+    addAgent(workspaceId, provider, name) {
       const agent: AgentConfig = { id: crypto.randomUUID(), provider, label: '' }
       updateWorkspace(workspaceId, (w) => ({
         ...w,
         agents: [...w.agents, { ...agent, label: nextAgentLabel(w.agents, provider) }]
       }))
       const workspace = get().workspaces.find((w) => w.id === workspaceId)
-      if (workspace && isolates(workspace, provider)) provision(workspaceId, agent.id)
+      if (workspace && isolates(workspace, provider)) provision(workspaceId, agent.id, name)
     },
 
     async removeAgent(workspaceId, agentId) {

@@ -49,7 +49,8 @@ const api: SquadstormApi = {
     push: (root) => ipcRenderer.invoke('git:push', root)
   },
   worktrees: {
-    add: (root, label) => ipcRenderer.invoke('worktrees:add', root, label),
+    add: (root, label, name) => ipcRenderer.invoke('worktrees:add', root, label, name),
+    checkName: (root, name) => ipcRenderer.invoke('worktrees:checkName', root, name),
     inspect: (root, worktree) => ipcRenderer.invoke('worktrees:inspect', root, worktree),
     remove: (root, worktree, force) => ipcRenderer.invoke('worktrees:remove', root, worktree, force),
     merge: (root, worktree) => ipcRenderer.invoke('worktrees:merge', root, worktree),
