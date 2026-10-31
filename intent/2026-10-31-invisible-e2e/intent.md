@@ -1,6 +1,6 @@
 # Intent: Invisible e2e, run at the end of every change
 
-Author: Kaloyan (owner). Status: draft. (You agreed on 2026-10-31 that a short intent alone is enough for this change.)
+Author: Kaloyan (owner). Status: accepted. (A short intent alone, agreed 2026-10-31.)
 Origin: idea. Issue: none.
 
 ## Problem
