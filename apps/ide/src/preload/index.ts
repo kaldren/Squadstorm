@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import type { SquadstormApi } from '@shared/api'
 
 function subscribe<T>(channel: string, listener: (id: string, payload: T) => void): () => void {
@@ -13,6 +13,7 @@ const api: SquadstormApi = {
     save: (state) => ipcRenderer.invoke('state:save', state)
   },
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
+  pathForFile: (file) => webUtils.getPathForFile(file),
   providers: () => ipcRenderer.invoke('providers:list'),
   github: {
     status: () => ipcRenderer.invoke('github:status'),
@@ -57,6 +58,7 @@ const api: SquadstormApi = {
   attention: {
     notify: (notice) => ipcRenderer.send('attention:notify', notice),
     badge: (count) => ipcRenderer.send('attention:badge', count),
+    working: (count) => ipcRenderer.send('attention:working', count),
     onClicked: (listener) => {
       const handler = (_e: IpcRendererEvent, agentId: string) => listener(agentId)
       ipcRenderer.on('attention:clicked', handler)
@@ -69,7 +71,8 @@ const api: SquadstormApi = {
     resize: (id, cols, rows) => ipcRenderer.send('pty:resize', id, cols, rows),
     kill: (id) => ipcRenderer.invoke('pty:kill', id),
     onData: (listener) => subscribe<string>('pty:data', listener),
-    onExit: (listener) => subscribe<number>('pty:exit', listener)
+    onExit: (listener) => subscribe<number>('pty:exit', listener),
+    onSession: (listener) => subscribe<string>('pty:session', listener)
   }
 }
 

@@ -1,5 +1,6 @@
 import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { evenSplit, gridRows, resizeSplit } from '@shared/layout'
+import { soleInFolder } from '@shared/sessions'
 import type { Workspace } from '@shared/types'
 import { useAttention } from '../stores/attention'
 import { useWorkspaces } from '../stores/workspaces'
@@ -35,6 +36,7 @@ export function AgentGrid({ workspace, hidden }: { workspace: Workspace; hidden:
   const removeAgent = useWorkspaces((s) => s.removeAgent)
   const moveAgent = useWorkspaces((s) => s.moveAgent)
   const pendingWorktrees = useWorkspaces((s) => s.pendingWorktrees)
+  const workspaces = useWorkspaces((s) => s.workspaces)
   const [maximizedId, setMaximizedId] = useState<string | null>(null)
   // An agent asked to take focus (its notification was clicked) can't hide behind a maximized tile.
   const focusRequest = useAttention((s) => s.focusRequest)
@@ -123,6 +125,7 @@ export function AgentGrid({ workspace, hidden }: { workspace: Workspace; hidden:
                     workspaceId={workspace.id}
                     workspacePath={workspace.path}
                     workspaceName={workspace.name}
+                    soleInFolder={soleInFolder(agent, workspaces)}
                     // Other tiles are hidden rather than unmounted so their terminals keep running.
                     maximized={agent.id === maximized}
                     hidden={hidden}

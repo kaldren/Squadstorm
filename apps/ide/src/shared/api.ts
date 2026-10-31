@@ -2,7 +2,7 @@ import type { FileEntry, ReadResult } from './files'
 import type { SearchQuery, SearchResult } from './search'
 import type { Commit, DiffSides, FileChange, GitStatus, LineStats } from './git'
 import type { AgentWorktree, AppState } from './types'
-import type { Provider } from './providers'
+import type { LaunchMode, Provider } from './providers'
 
 export interface SpawnRequest {
   id: string
@@ -10,6 +10,14 @@ export interface SpawnRequest {
   cwd: string
   cols: number
   rows: number
+  /** Resume the agent's previous conversation, or start a new one. */
+  mode: LaunchMode
+  /** No other agent of the same CLI runs in `cwd` (Codex can only resume then). */
+  soleInFolder: boolean
+  /** The CLI session to start or resume. */
+  sessionId: string
+  /** A new session id, used if resuming fails and the agent has to start over. */
+  nextSessionId: string
 }
 
 export interface SpawnResult {
@@ -63,6 +71,8 @@ export interface SquadstormApi {
     save(state: AppState): Promise<void>
   }
   pickFolder(): Promise<string | null>
+  /** Absolute path of a file dropped from Finder ('' for files that aren't on disk). */
+  pathForFile(file: File): string
   /** Absolute path of each provider's CLI, or null when it is not on PATH. */
   providers(): Promise<ProviderAvailability>
   github: {
@@ -122,6 +132,8 @@ export interface SquadstormApi {
     /** How many agents are waiting, shown on the dock icon (0 clears it). */
     badge(count: number): void
     onClicked(listener: (agentId: string) => void): () => void
+    /** How many agents are working: quitting while some are asks first. */
+    working(count: number): void
   }
   pty: {
     spawn(req: SpawnRequest): Promise<SpawnResult>
@@ -130,5 +142,7 @@ export interface SquadstormApi {
     kill(id: string): Promise<void>
     onData(listener: (id: string, data: string) => void): () => void
     onExit(listener: (id: string, exitCode: number) => void): () => void
+    /** The agent started over on a new session (its old one couldn't be resumed). */
+    onSession(listener: (id: string, sessionId: string) => void): () => void
   }
 }

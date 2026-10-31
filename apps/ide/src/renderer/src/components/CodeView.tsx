@@ -9,6 +9,8 @@ import { FileTree } from './FileTree'
 import { HistoryPanel } from './HistoryPanel'
 import { QuickOpen } from './QuickOpen'
 import { ReviewView } from './ReviewView'
+import { SendToAgent } from './SendToAgent'
+import { useWorkspaces } from '../stores/workspaces'
 import { SearchPanel } from './SearchPanel'
 
 const basename = (path: string) => path.split('/').pop() ?? path
@@ -32,6 +34,9 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
   // Files left out of the next commit (kept here so the choice survives switching panels).
   const [unchecked, setUnchecked] = useState<ReadonlySet<string>>(new Set())
   const git = useGitStatus(root, !hidden)
+  const sendRequest = useWorkspaces((s) => (s.sendRequest?.root === root ? s.sendRequest : null))
+  const openRequest = useWorkspaces((s) => (s.openRequest?.root === root ? s.openRequest : null))
+  const send = (path: string, from?: number, to?: number) => useWorkspaces.getState().requestSend({ root, path, from, to })
 
   // Forget unticked files that are no longer changed, so a file that changes again starts ticked.
   useEffect(() => {
@@ -84,6 +89,15 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
     setActive(path)
   }
 
+  // A path clicked in an agent's output opens here, at its line.
+  useEffect(() => {
+    if (!openRequest) return
+    useWorkspaces.getState().requestOpen(null)
+    const { path, line, column } = openRequest
+    open(path, line ? { line, column: Math.max(0, (column ?? 1) - 1), length: 0, before: '', match: '', after: '' } : undefined)
+    // Only the request matters: open() is recreated on every render.
+  }, [openRequest])
+
   const close = (path: string) => {
     if (dirty.has(path) && !confirm(`Discard unsaved changes to ${basename(path)}?`)) return
     const index = tabs.indexOf(path)
@@ -107,6 +121,7 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
   return (
     <div className={`${hidden ? 'hidden' : 'flex'} relative min-h-0 flex-1`}>
       {searching && <QuickOpen root={root} onOpen={open} onClose={() => setSearching(false)} />}
+      {sendRequest && !hidden && <SendToAgent request={sendRequest} onClose={() => useWorkspaces.getState().requestSend(null)} />}
       <Group orientation="horizontal" className="h-full w-full">
         <Panel id="files" defaultSize={260} minSize={180} maxSize={480}>
           <div className="flex h-full flex-col border-r border-line bg-panel">
@@ -145,7 +160,7 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
             </div>
             {/* Both stay mounted so the tree keeps its expanded folders. */}
             <div className={side === 'files' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
-              <FileTree root={root} activePath={diff || reviewing ? null : active} onOpen={open} status={git.status} />
+              <FileTree root={root} activePath={diff || reviewing ? null : active} onOpen={open} status={git.status} onSend={send} />
             </div>
             <div className={side === 'search' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
               <SearchPanel
@@ -170,6 +185,7 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
                 }}
                 unchecked={unchecked}
                 onCheck={(path, checked) => setUnchecked((u) => toggleIn(u, path, !checked))}
+                onSend={send}
                 onReview={() => {
                   setDiff(null)
                   setReviewing(true)
@@ -255,6 +271,7 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
                 change={diff.change}
                 commit={diff.commit}
                 onOpenFile={open}
+                onSend={send}
               />
             )}
             <div className={diff || reviewing ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
@@ -265,6 +282,7 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
                 reveal={reveal}
                 onDirty={markDirty}
                 onConflict={markConflict}
+                onSend={send}
               />
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { commitPathspec, NOT_A_REPO, type ChangeKind, type FileChange, type GitStatus } from '@shared/git'
+import { SendIcon } from './SendIcon'
 
 export const KIND_STYLE: Record<ChangeKind, { label: string; className: string }> = {
   M: { label: 'Modified', className: 'text-amber-400' },
@@ -59,9 +60,10 @@ interface Props {
   unchecked: ReadonlySet<string>
   onCheck(path: string, checked: boolean): void
   onReview(): void
+  onSend(path: string): void
 }
 
-export function ChangesPanel({ root, status, loaded, statusError, refresh, selected, onSelect, unchecked, onCheck, onReview }: Props) {
+export function ChangesPanel({ root, status, loaded, statusError, refresh, selected, onSelect, unchecked, onCheck, onReview, onSend }: Props) {
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState<'commit' | 'push' | 'discard' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -156,9 +158,23 @@ export function ChangesPanel({ root, status, loaded, statusError, refresh, selec
                 />
                 <span className={`truncate ${change.kind === 'D' ? 'line-through' : ''}`}>{name}</span>
                 <span className="truncate text-[11px] text-muted">{dir}</span>
+                {change.kind !== 'D' && (
+                  <button
+                    className="ml-auto hidden shrink-0 rounded px-1 text-[11px] text-muted group-hover:block hover:text-fg"
+                    title="Send to an agent"
+                    aria-label={`Send ${change.path} to an agent`}
+                    data-testid="send-file"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSend(change.path)
+                    }}
+                  >
+                    <SendIcon />
+                  </button>
+                )}
                 {change.kind !== 'C' && (
                   <button
-                    className="ml-auto hidden shrink-0 rounded px-1 text-[11px] text-muted group-hover:block hover:text-danger"
+                    className={`${change.kind === 'D' ? 'ml-auto' : ''} hidden shrink-0 rounded px-1 text-[11px] text-muted group-hover:block hover:text-danger`}
                     title={change.kind === 'A' ? 'Move the new file to the Trash' : 'Discard the changes to this file'}
                     aria-label={`Discard ${change.path}`}
                     data-testid="change-discard"
@@ -171,7 +187,7 @@ export function ChangesPanel({ root, status, loaded, statusError, refresh, selec
                   </button>
                 )}
                 <span
-                  className={`shrink-0 font-mono text-[11px] ${change.kind === 'C' ? 'ml-auto' : 'ml-auto group-hover:ml-0'} ${kind.className}`}
+                  className={`shrink-0 font-mono text-[11px] ml-auto group-hover:ml-0 ${kind.className}`}
                   title={kind.label}
                 >
                   {change.kind}

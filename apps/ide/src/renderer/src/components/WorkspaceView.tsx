@@ -49,6 +49,17 @@ export function WorkspaceView({ workspace, hidden }: { workspace: Workspace; hid
   const setCodeScope = useWorkspaces((s) => s.setCodeScope)
   const isolationBlocker = useIsolationBlocker(workspace.path)
 
+  // A file to open in this workspace (a path clicked in an agent's output): show the Code view of
+  // the folder it was clicked in; that view opens the file.
+  const openRoot = useWorkspaces((s) => s.openRequest?.root)
+  const ownsOpen =
+    openRoot !== undefined && (openRoot === workspace.path || workspace.agents.some((a) => a.worktree?.path === openRoot))
+  useEffect(() => {
+    if (!ownsOpen || !openRoot) return
+    setCodeScope(workspace.id, openRoot)
+    setView(workspace.id, 'code')
+  }, [ownsOpen, openRoot, workspace.id, setCodeScope, setView])
+
   // The Code view shows the workspace or one isolated agent's worktree.
   const scopes = [
     { root: workspace.path, label: 'Workspace' },

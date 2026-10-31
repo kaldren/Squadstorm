@@ -41,7 +41,7 @@ Start any mix of **Claude**, **Codex** and plain **Terminal** tiles. The grid la
 Turn on **Own worktree** (or tick it in setup) and every new agent works in its own git worktree, on its own `squadstorm/…` branch, in a folder outside your repo. Agents on separate tasks can't overwrite each other's files or break each other's builds. Each tile shows its branch; its **⋯** menu merges the agent's commits into your branch, opens a PR for them, or shows its code in the Code view. Removing the agent removes its worktree, asking first if that would discard uncommitted work, and keeps any branch that still has unmerged commits.
 
 ### 🗂️ Workspaces that come back
-Each project is a workspace in the sidebar, with its own squad. Quit and reopen the app: your workspaces, agents and grid order are all restored, with fresh sessions.
+Each project is a workspace in the sidebar, with its own squad. Quit and reopen the app: your workspaces, agents and grid order are all restored, and each agent picks up its own conversation. Claude agents always do. A Codex agent does when it has never shared its folder with another Codex agent (give each its own worktree), and otherwise starts fresh; since Codex resumes the newest session in the folder, a `codex` you ran there yourself in the meantime would be the one it picks up. Quitting while an agent is still working asks first.
 
 ### ⚡ One-step setup, from a folder or GitHub
 Choose your agents, then pick a local folder or **clone any of your GitHub repos** (private and org repos included, through the `gh` CLI). One click starts the whole squad.
@@ -56,6 +56,9 @@ Press **⌘E** to switch between your agents and a full editor:
 - open files reload automatically when an agent changes them.
 
 <img src="docs/screenshots/code.png" alt="The code view with the file tree and editor" />
+
+### 🔗 Code ⇄ agents
+Select some lines and press **⌘L** (or use **→** on a file in the tree or in Changes) to drop a reference like `src/a.ts:2-3` into an agent's prompt, with an optional note. It's pasted, not submitted, unless you send with **⌘↵**. The other way round, **⌘-click** a file path in an agent's output to open it at that line, or a URL to open it in your browser. Drag files or screenshots from Finder onto a tile to paste their paths.
 
 ### 🔎 Quick Open and project search
 **⌘P** fuzzy-finds any file. **⇧⌘F** searches the whole project, with match-case, whole-word, regex and include/exclude filters.
@@ -111,6 +114,8 @@ pnpm dist          # from apps/ide: builds Squadstorm.app into apps/ide/dist/
 | **⌘P** | Quick Open a file |
 | **⇧⌘F** | Search the project |
 | **⌘S** | Save the current file |
+| **⌘L** | Send the selection (or file) to an agent |
+| **⌘-click** | Open a path or URL printed by an agent |
 | **⌘↵** | Commit (in the Changes panel) |
 
 ## Under the hood
