@@ -14,7 +14,7 @@ Every change lives in `intent/<YYYY-MM-DD>-<slug>/`. **Read that folder first**;
 | 1 Plan | `intent.md` | `Status: accepted` (or `rejected`) | Design |
 | 2 Design | `spec.md` | `Status: accepted`, every flagged concern resolved | Plan mode |
 | 3 Build | `plan.md` | `Status: accepted` before any code | Implementation |
-| 4 Test | code + tests | `pnpm typecheck && pnpm test` green, plus `pnpm test:e2e` when UI or IPC changed; output pasted | PR |
+| 4 Test | code + tests | `pnpm typecheck && pnpm test && pnpm test:e2e` green; output pasted | PR |
 | 5 Deploy | PR + review findings | Important findings resolved; the user merges | CI on `main` |
 | 6 Maintain | bug / incident / finding → new `intent.md` | Triage: fix now, schedule, dismiss | Stage 1 |
 
@@ -59,7 +59,7 @@ Requirements and design are one session, not two phases.
 - State the target before coding, checkably: "tests in X pass", "the panel shows Y", "screenshot matches the mock".
 - Bug fixes: failing test first. Reproduce the bug as a test, run it, confirm it fails for the expected reason, commit it. Only then fix, without touching the test.
 - UI work: run the app (`pnpm dev:ide`) or screenshot it and compare with the mock; two or three rounds is normal.
-- Done means `pnpm typecheck && pnpm test` green, plus `pnpm test:e2e` when UI or IPC changed, with the literal output pasted into the PR description.
+- Done means `pnpm typecheck && pnpm test && pnpm test:e2e` green at the end of every change, whatever it touched, with the literal output pasted into the PR description. The e2e suite runs invisibly (no window, no Dock icon), so run it without asking.
 - Final check in a fresh context: a reviewer that did not write the code (a new session or the code-reviewer agent) reads the diff and reports; it never fixes.
 
 ## 5 Deploy → PR

@@ -143,7 +143,8 @@ export function ReviewView({ root, status, onOpenFile, onClose }: Props) {
         )}
       </div>
       {undo && (
-        <div className="absolute right-4 bottom-4 flex items-center gap-3 rounded-md border border-line bg-panel px-3 py-2 text-xs shadow-xl">
+        // Above the sticky file headers (z-10), which otherwise cover it on a small screen.
+        <div className="absolute right-4 bottom-4 z-20 flex items-center gap-3 rounded-md border border-line bg-panel px-3 py-2 text-xs shadow-xl">
           <span>Discarded a change in {undo.path.split('/').pop()}</span>
           <button className="font-medium text-accent hover:underline" data-testid="undo-discard" onClick={() => void undoDiscard()}>
             Undo

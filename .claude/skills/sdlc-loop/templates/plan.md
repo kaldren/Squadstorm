@@ -25,7 +25,7 @@ Approaches considered and why not.
 What demonstrates each acceptance criterion from spec.md:
 - AC1 → `pnpm --filter <workspace> test -- <file>` green
 - AC2 → screenshot matches the mock at `…`
-- All → `pnpm typecheck && pnpm test` (and `pnpm test:e2e` when UI or IPC changed) output pasted in the PR
+- All → `pnpm typecheck && pnpm test && pnpm test:e2e` output pasted in the PR
 
 ## Deviations
 Filled in during implementation, in the same commit as the deviation.

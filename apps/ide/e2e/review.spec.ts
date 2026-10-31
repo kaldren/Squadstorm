@@ -246,3 +246,30 @@ test('committing a file whose name looks like a pattern commits only that file',
   expect(git(dir, 'show', '--name-only', '--format=', 'HEAD').trim()).toBe('app/[id]/page.ts')
   await s.app.close()
 })
+
+test('the undo toast stays clickable on a small window', async () => {
+  const dir = repoWith(
+    Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`f${i}.ts`, lines(40)])),
+    Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`f${i}.ts`, lines(40, { 2: `change ${i}`, 30: `more ${i}` })]))
+  )
+  const s = await openRepo(dir)
+  await s.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 600))
+  await section(s, 'f0.ts').getByTestId('discard-hunk').first().click()
+  await expect.poll(() => read(s, 'f0.ts')).toBe(lines(40, { 30: 'more 0' }))
+  // Scroll a file's header right under the toast (on CI's smaller screen that happened by itself);
+  // the toast must still be the one that gets the click.
+  await expect(s.page.getByTestId('undo-discard')).toBeVisible()
+  await expect(section(s, 'f4.ts').getByTestId('discard-file')).toBeAttached()
+  const onTop = await s.page.evaluate(() => {
+    const undo = document.querySelector('[data-testid="undo-discard"]')!
+    const list = document.querySelector('[data-testid="review-view"] .overflow-y-auto') as HTMLElement
+    const header = document.querySelector('[data-testid="review-file"][data-path="f4.ts"] > div') as HTMLElement
+    list.scrollTop += header.getBoundingClientRect().top - undo.getBoundingClientRect().top
+    const r = undo.getBoundingClientRect()
+    return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === undo
+  })
+  expect(onTop).toBe(true)
+  await s.page.getByTestId('undo-discard').click()
+  await expect.poll(() => read(s, 'f0.ts')).toBe(lines(40, { 2: 'change 0', 30: 'more 0' }))
+  await s.app.close()
+})

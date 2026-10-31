@@ -119,6 +119,12 @@ function setBadge(count: unknown): void {
   else app.dock?.setBadge(text)
 }
 
+/**
+ * e2e runs keep the app invisible: the window is never shown and the app stays out of the Dock, so a
+ * test run doesn't take over the screen. SQUADSTORM_E2E_SHOW=1 shows it, to watch a run.
+ */
+const invisible = !!process.env.SQUADSTORM_E2E && !process.env.SQUADSTORM_E2E_SHOW
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -132,11 +138,15 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      // A window that is never shown would otherwise have its timers and rendering throttled.
+      backgroundThrottling: !invisible
     }
   })
 
-  mainWindow.once('ready-to-show', () => mainWindow?.show())
+  mainWindow.once('ready-to-show', () => {
+    if (!invisible) mainWindow?.show()
+  })
   // A fresh page starts with no waiting or working agents (it re-counts them).
   mainWindow.webContents.on('did-start-loading', () => {
     setBadge(0)
@@ -257,6 +267,7 @@ app.whenReady().then(() => {
   if (!app.isPackaged && process.platform === 'darwin') {
     app.dock?.setIcon(join(__dirname, '../../build/icon.png'))
   }
+  if (invisible) app.dock?.hide()
   registerIpc()
   createWindow()
   app.on('activate', () => {
