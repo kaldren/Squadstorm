@@ -284,3 +284,49 @@ test('code view: ⌘⇧F searches file contents and jumps to matches', async () 
 
   await app.close()
 })
+
+test('code view: long lines wrap to the editor width', async () => {
+  const userData = mkdtempSync(join(tmpdir(), 'squadstorm-e2e-data-'))
+  const project = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-project-')))
+  const long = Array.from({ length: 200 }, (_, i) => `word${i}`).join(' ')
+  const content = `first\n${long}\nlast\n`
+  writeFileSync(join(project, 'notes.txt'), content)
+
+  const app = await electron.launch({
+    args: ['.'],
+    env: { ...process.env, SQUADSTORM_E2E: '1', SQUADSTORM_USER_DATA: userData, SQUADSTORM_AGENT_CMD: 'exec cat' }
+  })
+  await app.evaluate(({ dialog }, folder) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] })
+  }, project)
+  const page = await app.firstWindow()
+  await page.getByTestId('pick-folder').click()
+  await page.getByTestId('start').click()
+  await expect(page.getByTestId('agent-tile')).toHaveCount(1)
+
+  await page.getByRole('tab', { name: 'Code' }).click()
+  await page.getByTestId('file-entry').filter({ hasText: 'notes.txt' }).click()
+  const editor = page.locator('.cm-content')
+  await expect(editor).toContainText('word199')
+
+  // Nothing to scroll sideways, and the long line takes several rows.
+  const scroller = page.locator('.cm-scroller')
+  const { scrollWidth, clientWidth } = await scroller.evaluate((el) => ({
+    scrollWidth: el.scrollWidth,
+    clientWidth: el.clientWidth
+  }))
+  expect(scrollWidth).toBeLessThanOrEqual(clientWidth)
+  const rows = await page
+    .locator('.cm-line')
+    .nth(1)
+    .evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)))
+  expect(rows).toBeGreaterThan(1)
+  // Still one real line: the gutter numbers three lines, and saving writes the file unchanged.
+  await expect(page.locator('.cm-lineNumbers .cm-gutterElement').filter({ hasText: /^\d+$/ })).toHaveText(['1', '2', '3', '4'])
+  await editor.click()
+  await page.keyboard.press('Meta+s')
+  await expect.poll(() => readFileSync(join(project, 'notes.txt'), 'utf8')).toBe(content)
+  await page.screenshot({ path: 'test-results/code-wrap.png' })
+
+  await app.close()
+})
