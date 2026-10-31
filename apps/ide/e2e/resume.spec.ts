@@ -9,6 +9,7 @@ import { join } from 'node:path'
 const FAKE_AGENT = `
 echo "args=[$*]"
 case " $* " in *" --resume "*) [ -n "$SQUADSTORM_E2E_FAIL_RESUME" ] && exit 1 ;; esac
+case " $* " in *" --session-id $SQUADSTORM_E2E_USED "*) echo "Session ID already in use"; exit 1 ;; esac
 if [ -n "$SQUADSTORM_E2E_BUSY" ]; then
   while [ ! -f "$SQUADSTORM_E2E_BUSY" ]; do echo working; sleep 0.1; done
 fi
@@ -112,3 +113,57 @@ test('quitting asks while an agent is working', async () => {
   await page.waitForTimeout(300)
   await app.close()
 })
+
+test('a session that exists but won\'t resume gets a new one, which is resumed next time', async () => {
+  const userData = mkdtempSync(join(tmpdir(), 'squadstorm-e2e-data-'))
+  let app = await launch(userData)
+  let page = await setup(app, 1)
+  const id = (await page.getByTestId('agent-tile').getAttribute('data-agent-id'))!
+  await page.waitForTimeout(500)
+  await app.close()
+
+  // Resuming fails, and the agent's own id is taken: the fresh start needs a new session id.
+  app = await launch(userData, { SQUADSTORM_E2E_FAIL_RESUME: '1', SQUADSTORM_E2E_USED: id })
+  page = await app.firstWindow()
+  let tile = page.getByTestId('agent-tile')
+  await expect.poll(() => output(app, tile)).toMatch(/args=\[--session-id [0-9a-f-]{36}\]/)
+  const fresh = (await output(app, tile)).match(/args=\[--session-id ([0-9a-f-]{36})\]/)![1]
+  expect(fresh).not.toBe(id)
+  await expect(tile.getByRole('button', { name: 'Restart' })).toHaveCount(0)
+  await page.waitForTimeout(500)
+  await app.close()
+
+  // Next time, that new session is the one resumed.
+  app = await launch(userData)
+  page = await app.firstWindow()
+  tile = page.getByTestId('agent-tile')
+  await expect.poll(() => output(app, tile)).toContain(`args=[--resume ${fresh}]`)
+  await app.close()
+})
+
+test('closing the window asks too, through the real dialog call', async () => {
+  const userData = mkdtempSync(join(tmpdir(), 'squadstorm-e2e-data-'))
+  const done = join(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-busy-')), 'done')
+  const app = await launch(userData, { SQUADSTORM_E2E_BUSY: done })
+  const page = await setup(app, 1)
+  await expect(page.getByTestId('agent-tile').getByTestId('agent-activity')).toHaveAttribute('data-activity', 'working', { timeout: 10_000 })
+
+  // Answer with whichever button says Cancel, and record what was asked.
+  await app.evaluate(({ dialog, BrowserWindow }) => {
+    const asked: string[] = []
+    Object.assign(globalThis, { __asked: asked })
+    dialog.showMessageBoxSync = ((...args: unknown[]) => {
+      const options = args.at(-1) as { message: string; buttons: string[] }
+      asked.push(options.message)
+      return options.buttons.indexOf('Cancel')
+    }) as typeof dialog.showMessageBoxSync
+    BrowserWindow.getAllWindows()[0].close()
+  })
+  await page.waitForTimeout(500)
+  expect(await app.evaluate(() => (globalThis as any).__asked)).toEqual(['1 agent is still working'])
+  expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1)
+
+  writeFileSync(done, '')
+  await app.close()
+})
+

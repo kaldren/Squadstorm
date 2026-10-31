@@ -28,3 +28,9 @@ describe('launchArgs', () => {
     expect(launchArgs('terminal', 'resume', { id, soleInFolder: true })).toEqual({ args: ['-l'], mode: 'fresh' })
   })
 })
+
+describe('session ids', () => {
+  it('never passes an id that is not a UUID (it could read as a flag)', () => {
+    expect(launchArgs('claude', 'resume', { id: '--mcp-config=/x.json', soleInFolder: true })).toEqual({ args: [], mode: 'fresh' })
+  })
+})
