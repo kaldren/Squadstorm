@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ProviderAvailability } from '@shared/api'
 import { moveItem, nextAgentLabel } from '@shared/layout'
+import { newlySharedAgents } from '@shared/sessions'
 import { PROVIDERS, PROVIDER_IDS, type Provider } from '@shared/providers'
 import type { AgentConfig, AppState, Workspace } from '@shared/types'
 
@@ -61,6 +62,10 @@ interface WorkspacesStore extends AppState {
   setIsolate(workspaceId: string, isolate: boolean): void
   addAgent(workspaceId: string, provider: Provider): void
   removeAgent(workspaceId: string, agentId: string): Promise<void>
+  /** Remembers that an agent has run, so the next launch resumes its conversation. */
+  markStarted(workspaceId: string, agentId: string): void
+  /** Remembers the session an agent resumes from now on. */
+  setSessionId(agentId: string, sessionId: string): void
   moveAgent(workspaceId: string, agentId: string, toIndex: number): void
 }
 
@@ -266,6 +271,22 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
       }))
     },
 
+    setSessionId(agentId, sessionId) {
+      set({
+        workspaces: get().workspaces.map((w) => ({
+          ...w,
+          agents: w.agents.map((a) => (a.id === agentId ? { ...a, sessionId } : a))
+        }))
+      })
+    },
+
+    markStarted(workspaceId, agentId) {
+      updateWorkspace(workspaceId, (w) => ({
+        ...w,
+        agents: w.agents.map((a) => (a.id === agentId && !a.started ? { ...a, started: true } : a))
+      }))
+    },
+
     moveAgent(workspaceId, agentId, toIndex) {
       updateWorkspace(workspaceId, (w) => {
         const from = w.agents.findIndex((a) => a.id === agentId)
@@ -273,6 +294,20 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
       })
     }
   }
+})
+
+// Agents that ever share their folder with another agent of the same CLI are marked for good: from
+// then on "the newest session in this folder" may not be theirs.
+useWorkspaces.subscribe((state, prev) => {
+  if (state.workspaces === prev.workspaces) return
+  const shared = new Set(newlySharedAgents(state.workspaces))
+  if (shared.size === 0) return
+  useWorkspaces.setState({
+    workspaces: state.workspaces.map((w) => ({
+      ...w,
+      agents: w.agents.map((a) => (shared.has(a.id) ? { ...a, sharedFolder: true } : a))
+    }))
+  })
 })
 
 // Persist only the durable part of the store whenever it changes. Agents still waiting for their

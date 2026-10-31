@@ -58,6 +58,7 @@ const api: SquadstormApi = {
   attention: {
     notify: (notice) => ipcRenderer.send('attention:notify', notice),
     badge: (count) => ipcRenderer.send('attention:badge', count),
+    working: (count) => ipcRenderer.send('attention:working', count),
     onClicked: (listener) => {
       const handler = (_e: IpcRendererEvent, agentId: string) => listener(agentId)
       ipcRenderer.on('attention:clicked', handler)
@@ -70,7 +71,8 @@ const api: SquadstormApi = {
     resize: (id, cols, rows) => ipcRenderer.send('pty:resize', id, cols, rows),
     kill: (id) => ipcRenderer.invoke('pty:kill', id),
     onData: (listener) => subscribe<string>('pty:data', listener),
-    onExit: (listener) => subscribe<number>('pty:exit', listener)
+    onExit: (listener) => subscribe<number>('pty:exit', listener),
+    onSession: (listener) => subscribe<string>('pty:session', listener)
   }
 }
 
