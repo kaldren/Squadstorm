@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { indentWithTab } from '@codemirror/commands'
 import { LanguageDescription } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
@@ -70,6 +70,8 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict }: 
   /** The conflict of the file on screen, mirrored from its buffer so the banner re-renders. */
   const [conflict, setShownConflict] = useState<Conflict | null>(null)
   const [comparing, setComparing] = useState(false)
+  /** Give the editor focus back once the conflict UI is gone (after Reload or Keep mine). */
+  const refocus = useRef(false)
   /** A reveal waiting for its file to load or come on screen. */
   const pendingReveal = useRef<Reveal | null>(null)
   // Extensions are built once per file, so they reach the latest props through refs.
@@ -187,7 +189,7 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict }: 
       propsRef.current.onDirty(path, liveState(path, buffer).doc.toString() !== disk)
     }
     // After the banner and comparison are gone: the editor can't take focus while still hidden.
-    requestAnimationFrame(() => viewRef.current?.focus())
+    refocus.current = true
   }
 
   const createState = (path: string, content: string) => {
@@ -315,6 +317,14 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict }: 
       }),
     [root]
   )
+
+  // Right after React removed the banner, before the next keystroke can land elsewhere; not on the next
+  // animation frame, which a window in the background may get late.
+  useLayoutEffect(() => {
+    if (!refocus.current || conflict !== null || comparing) return
+    refocus.current = false
+    viewRef.current?.focus()
+  }, [conflict, comparing])
 
   const showConflict = conflict !== null && message === null
 
