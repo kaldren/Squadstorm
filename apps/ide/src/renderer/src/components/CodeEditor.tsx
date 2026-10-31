@@ -37,10 +37,13 @@ interface Conflict {
 }
 
 /**
- * An open file: its editor state (undo history included) and the disk content it was loaded from or
- * last acknowledged (null once a deletion was acknowledged).
+ * An open file: its editor state (undo history included), the disk content it was loaded from or
+ * last acknowledged (null once a deletion was acknowledged), and where it was scrolled to when last on
+ * screen. The scroll is a document position, not pixels: wrapped lines are re-measured on return.
  */
-type Buffer = { state: EditorState; saved: string | null; scrollTop: number; conflict?: Conflict } | { error: string }
+type Buffer =
+  | { state: EditorState; saved: string | null; scroll: StateEffect<unknown> | null; conflict?: Conflict }
+  | { error: string }
 
 const ipcMessage = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
@@ -88,8 +91,11 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, on
   const update = (path: string, spec: { changes?: { from: number; to: number; insert: string }; effects?: StateEffect<unknown> }) => {
     const buffer = buffers.current.get(path)
     if (!buffer || 'error' in buffer) return
-    if (shownRef.current === path && viewRef.current) viewRef.current.dispatch(spec)
-    else buffer.state = buffer.state.update(spec).state
+    if (shownRef.current === path && viewRef.current) return viewRef.current.dispatch(spec)
+    const tr = buffer.state.update(spec)
+    buffer.state = tr.state
+    // Keep the saved scroll on the same text when the file changes off screen.
+    if (buffer.scroll) buffer.scroll = buffer.scroll.map(tr.changes) ?? null
   }
 
   /** Bumped by every save of a path, so reads started before it can be told apart. */
@@ -238,7 +244,7 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, on
     const prevBuffer = prev !== null ? buffers.current.get(prev) : undefined
     if (prevBuffer && 'state' in prevBuffer) {
       prevBuffer.state = view.state
-      prevBuffer.scrollTop = view.scrollDOM.scrollTop
+      prevBuffer.scroll = view.scrollSnapshot()
     }
     shownRef.current = null
     setComparing(false)
@@ -258,7 +264,7 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, on
       return
     }
     requestAnimationFrame(() => {
-      view.scrollDOM.scrollTop = buffer.scrollTop
+      if (buffer.scroll) view.dispatch({ effects: buffer.scroll })
       view.focus()
     })
   }
@@ -288,7 +294,7 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, on
     let cancelled = false
     window.api.files
       .read(root, active)
-      .then((r) => ('error' in r ? r : { state: createState(active, r.content), saved: r.content, scrollTop: 0 }))
+      .then((r) => ('error' in r ? r : { state: createState(active, r.content), saved: r.content, scroll: null }))
       .catch((e: Error) => ({ error: e.message.replace(/^Error invoking remote method '[^']+': /, '') }))
       .then((buffer) => {
         if (cancelled) return
