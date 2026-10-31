@@ -1,6 +1,6 @@
 # Intent: Name an agent's worktree branch
 
-Author: Kaloyan (owner). Status: draft.
+Author: Kaloyan (owner). Status: Accepted.
 Origin: idea (2026-10-31). Issue: none.
 
 ## Problem
