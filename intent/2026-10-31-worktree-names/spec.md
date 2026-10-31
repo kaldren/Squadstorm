@@ -1,6 +1,6 @@
 # Spec: Name an agent's worktree branch
 
-From: intent/2026-10-31-worktree-names/intent.md. Status: draft.
+From: intent/2026-10-31-worktree-names/intent.md. Status: Accepted.
 Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill, intent/2026-10-30-agent-worktrees/spec.md (the design this extends).
 
 ## Requirements
@@ -49,10 +49,10 @@ Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill, intent/2026-1
 - If creating the worktree still fails afterwards (a race, a git error), today's alert and tile removal apply unchanged.
 
 ## Flagged concerns
-- [ ] **Slug the typed name, or refuse anything that isn't already a slug?** Constraint: intent success criterion 3 ("a name invalid for git is not used and I'm told why"). Proposed: slug it (`Login fix` → `login-fix`) and show the resulting branch live in the preview, so you see exactly what you'll get; only names that slug to nothing or are too long are refused. Alternative: refuse anything outside `a-z 0-9 -`. Slugging also means no `/` in names (`feat/login` → `feat-login`), because the existing safety guard only accepts `squadstorm/[a-z0-9-]+`; allowing `/` would mean loosening that guard.
-- [ ] **One extra keypress for every isolated agent, and one existing test changes.** Constraint: intent outcome "skipping is as quick as adding an agent is now" and AC7 of the worktrees spec ("existing e2e pass unchanged"). With the popover, adding an isolated agent becomes click + Enter instead of a click. `› removing an agent` then needs an Enter after its two **+ Claude** clicks. Proposed: accept both. Alternative: keep the click adding immediately and put naming behind a separate control (e.g. a `⌄` beside each button, or ⌥-click), which needs no test change but is easy to miss.
-- [ ] **Agents created from Setup can't be named.** Setup creates N agents at once from counters. Proposed: they keep automatic names; naming is only on the header buttons. Renaming afterwards is out of scope per the intent.
-- [ ] **Taken name: refuse, not suffix** (intent open question 3). Proposed: refuse with the reason, as R4 says. A silent suffix would give you a name you didn't ask for.
+- [x] **Slug the typed name, or refuse anything that isn't already a slug?** Constraint: intent success criterion 3 ("a name invalid for git is not used and I'm told why"). Proposed: slug it (`Login fix` → `login-fix`) and show the resulting branch live in the preview, so you see exactly what you'll get; only names that slug to nothing or are too long are refused. Alternative: refuse anything outside `a-z 0-9 -`. Slugging also means no `/` in names (`feat/login` → `feat-login`), because the existing safety guard only accepts `squadstorm/[a-z0-9-]+`; allowing `/` would mean loosening that guard. **Resolved 2026-10-31: as proposed (spec accepted).**
+- [x] **One extra keypress for every isolated agent, and one existing test changes.** Constraint: intent outcome "skipping is as quick as adding an agent is now" and AC7 of the worktrees spec ("existing e2e pass unchanged"). With the popover, adding an isolated agent becomes click + Enter instead of a click. `› removing an agent` then needs an Enter after its two **+ Claude** clicks. Proposed: accept both. Alternative: keep the click adding immediately and put naming behind a separate control (e.g. a `⌄` beside each button, or ⌥-click), which needs no test change but is easy to miss. **Resolved 2026-10-31: as proposed (spec accepted).**
+- [x] **Agents created from Setup can't be named.** Setup creates N agents at once from counters. Proposed: they keep automatic names; naming is only on the header buttons. Renaming afterwards is out of scope per the intent. **Resolved 2026-10-31: as proposed (spec accepted).**
+- [x] **Taken name: refuse, not suffix** (intent open question 3). Proposed: refuse with the reason, as R4 says. A silent suffix would give you a name you didn't ask for. **Resolved 2026-10-31: as proposed (spec accepted).**
 
 ## Risk
 Low to medium. The change only picks a different branch name before the existing worktree code runs; removal, merge and PR code is untouched and its guard still applies. The risky case, reusing an existing branch, is blocked twice: by the explicit check and by `git worktree add -b` itself. No migrations, no new stored data.
