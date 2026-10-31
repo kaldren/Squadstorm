@@ -27,7 +27,10 @@ export function SendToAgent({ request, onClose }: { request: SendRequest; onClos
   const send = (submit: boolean) => {
     const target = targets[selected]
     if (!workspace || !target) return
-    window.api.pty.write(target.id, bracketedPaste(formatReference(request.path, request.from, request.to, note)) + (submit ? '\r' : ''))
+    window.api.pty.write(target.id, bracketedPaste(formatReference(request.path, request.from, request.to, note)))
+    // Enter as its own keystroke, after the paste has landed: some CLIs fold a CR that arrives with a
+    // paste into the pasted text.
+    if (submit) setTimeout(() => window.api.pty.write(target.id, '\r'), 80)
     const { setView } = useWorkspaces.getState()
     setView(workspace.id, 'agents')
     useAttention.getState().requestFocus(target.id)
@@ -41,7 +44,7 @@ export function SendToAgent({ request, onClose }: { request: SendRequest; onClos
     }
     if (e.key === 'ArrowDown') move(1)
     else if (e.key === 'ArrowUp') move(-1)
-    else if (e.key === 'Enter') {
+    else if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
       e.preventDefault()
       send(e.metaKey || e.ctrlKey)
     } else if (e.key === 'Escape') {

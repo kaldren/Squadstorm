@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bracketedPaste, findPathLinks, findUrlLinks, formatReference, quotePath } from '../src/shared/links'
+import { bracketedPaste, cellRange, findPathLinks, findUrlLinks, formatReference, logicalLine, quotePath } from '../src/shared/links'
 
 const paths = (text: string) => findPathLinks(text).map(({ path, line, column }) => ({ path, line, column }))
 
@@ -67,3 +67,31 @@ describe('paste helpers', () => {
     expect(quotePath("/Users/me/it's here.png")).toBe(`'/Users/me/it'\\''s here.png'`)
   })
 })
+
+describe('logical lines', () => {
+  const row = (y: number, text: string, wide = '') =>
+    ({ y, cells: [...text].flatMap((ch) => (wide.includes(ch) ? [{ chars: ch, width: 2 }, { chars: '', width: 0 }] : [{ chars: ch, width: 1 }])) })
+
+  it('maps text after wide characters to the right cells', () => {
+    const { text, positions } = logicalLine([row(1, '修正 a.ts', '修正')])
+    expect(text).toBe('修正 a.ts')
+    expect(cellRange(positions, 3, 7)).toEqual({ start: { x: 6, y: 1 }, end: { x: 9, y: 1 } })
+  })
+
+  it('joins wrapped rows and trims the trailing blank cells', () => {
+    const { text, positions } = logicalLine([row(4, 'see https://x.co'), row(5, 'm/long   ')])
+    expect(text).toBe('see https://x.com/long')
+    expect(cellRange(positions, 4, 22)).toEqual({ start: { x: 5, y: 4 }, end: { x: 6, y: 5 } })
+  })
+})
+
+describe('more link edges', () => {
+  it('keeps a closing parenthesis a URL opened', () => {
+    expect(findUrlLinks('see https://en.wikipedia.org/wiki/Foo_(bar).').map((l) => l.url)).toEqual(['https://en.wikipedia.org/wiki/Foo_(bar)'])
+  })
+
+  it('finds dotfile paths', () => {
+    expect(findPathLinks('edit .github/workflows/ci.yml').map((l) => l.path)).toEqual(['.github/workflows/ci.yml'])
+  })
+})
+

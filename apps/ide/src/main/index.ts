@@ -106,6 +106,10 @@ function createWindow(): void {
   mainWindow.webContents.on('did-start-loading', () => setBadge(0))
 
   // Links printed by agents (auth URLs, docs) open in the real browser, never inside the app.
+  // The window only ever shows the app: a file dropped outside a tile, or a stray link, must not
+  // replace it (a loaded page would get the app's bridge to agents and files).
+  mainWindow.webContents.on('will-navigate', (e) => e.preventDefault())
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) {
       // e2e tests check what would have opened instead of launching a browser.

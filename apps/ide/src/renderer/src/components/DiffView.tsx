@@ -67,7 +67,11 @@ export function DiffView({ root, change, commit, onOpenFile, onSend }: Props) {
           parent: hostRef.current!,
           state: EditorState.create({
             doc: modified,
-            extensions: [...diffExtensions(original, lang), sendKeymap((from, to) => sendRef.current?.(change.path, from, to))]
+            // Only the working tree's version can be sent: the agent reads the file as it is now.
+            extensions: [
+              ...diffExtensions(original, lang),
+              commit || change.kind === 'D' ? [] : sendKeymap((from, to) => sendRef.current?.(change.path, from, to))
+            ]
           })
         })
         view.scrollDOM.scrollTop = scrollTop

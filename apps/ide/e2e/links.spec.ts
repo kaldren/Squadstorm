@@ -224,8 +224,16 @@ test('the window never navigates away from the app', async () => {
     location.href = 'file:///etc/hosts'
   })
   await page.waitForTimeout(500)
-  await expect(page.getByTestId('agent-tile')).toHaveCount(2)
-  expect(page.url()).not.toContain('/etc/hosts')
+  // Asked from main: Playwright treats the page as mid-navigation after a blocked attempt.
+  const state = await app.evaluate(async ({ BrowserWindow }) => {
+    const contents = BrowserWindow.getAllWindows()[0].webContents
+    return {
+      url: contents.getURL(),
+      tiles: await contents.executeJavaScript(`document.querySelectorAll('[data-testid="agent-tile"]').length`)
+    }
+  })
+  expect(state.url).toMatch(/\/renderer\/index\.html$/)
+  expect(state.tiles).toBe(2)
   await app.close()
 })
 

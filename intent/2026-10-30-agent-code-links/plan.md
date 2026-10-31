@@ -70,8 +70,16 @@ Step 4: link detection on every rendered line. The providers only run for the ho
 ## Deviations
 - 2026-10-30 — The link test hook (`window.__squadstormLinks`) is installed always, not only under `SQUADSTORM_E2E`: the renderer can't see that variable, and the hook only exposes the tile's own link providers to renderer code.
 - 2026-10-30 — Links are underlined whenever hovered (xterm's link decoration), not only while ⌘ is held; they still only open with ⌘.
-- 2026-10-30 — Diff and review editors are now read-only but focusable (`EditorView.editable` is no longer turned off), so text can be selected there and sent with ⌘L.
+- 2026-10-30 — Diff editors are now read-only but focusable (`EditorView.editable` is no longer turned off), so text can be selected there and sent with ⌘L. (The review view shares the setup but has no ⌘L.)
 - 2026-10-30 — Deleted files in Changes have no send button (there's no file to point at).
 - 2026-10-30 — The ⌘L keymap lives in `src/renderer/src/sendKeymap.ts`, shared by the editor and diffs.
 - 2026-10-30 — The send button on file rows is an icon (`SendIcon.tsx`), not a "→" character: text in the row broke `code.spec.ts`'s check of the tree's entries, and the row's text should stay the file name.
+- 2026-10-30 — AC4 and AC5 share one e2e test (`› click a path or a URL in agent output`): both need the same agent output and hook. The open request carries the folder (`root`) instead of a workspace id; the workspace is found from it.
+- 2026-10-30 — From review, failing tests first:
+  - pasted text drops every control character (and nested paste markers, repeatedly), so crafted file names can't end the paste early and submit a prompt;
+  - links are found on whole logical lines (wrapped rows joined, up to 24 rows) and mapped cell by cell, so they sit on the right cells after wide characters and long wrapped URLs stay whole;
+  - the file list behind path links is one shared, watched index per folder (`fileIndex.ts`), so files created after a tile started become links, without opening the Code view, and N tiles in a folder share one listing;
+  - the window can't navigate away from the app (`will-navigate` blocked in main, drops outside tiles ignored).
+- 2026-10-30 — Also from review: ⌘-sending is off in commit diffs and deleted-file diffs (the reference would point at a version the agent can't see); "Send & submit" sends Enter as its own keystroke after the paste; Enter during IME composition doesn't send; dotfile paths and URLs ending in a parenthesis they opened link correctly; the tree's send icon sits at the row's right edge.
+- 2026-10-30 — Not done (review nits, accepted): bracketed paste is used even for programs that didn't enable it (plain shells show the markers); paths with `[`, `(` or `+` (Next.js/SvelteKit routes) don't link; the picker lists every tile of the workspace, including exited ones and agents still getting their worktree, and doesn't prefer the worktree's own agent.
 

@@ -104,7 +104,7 @@ export function FileTree({ root, activePath, onOpen, status, onSend }: Props) {
             {changed && <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/80" title="Contains changes" />}
             {onSend && !entry.dir && (
               <button
-                className={`hidden shrink-0 rounded px-1 text-[11px] text-muted group-hover:block hover:text-fg ${kind ? '' : 'ml-auto'}`}
+                className="ml-auto hidden shrink-0 rounded px-1 text-[11px] text-muted group-hover:block hover:text-fg"
                 title="Send to an agent"
                 aria-label={`Send ${entry.path} to an agent`}
                 data-testid="send-file"
@@ -116,7 +116,9 @@ export function FileTree({ root, activePath, onOpen, status, onSend }: Props) {
                 <SendIcon />
               </button>
             )}
-            {kind && <span className={`ml-auto shrink-0 font-mono text-[10px] ${KIND_COLOR[kind]}`}>{kind}</span>}
+            {kind && (
+              <span className={`ml-auto shrink-0 font-mono text-[10px] ${onSend ? 'group-hover:ml-0' : ''} ${KIND_COLOR[kind]}`}>{kind}</span>
+            )}
           </div>
           {entry.dir && expanded.has(entry.path) && renderDir(entry.path, depth + 1)}
         </div>

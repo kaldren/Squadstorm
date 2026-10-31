@@ -4,14 +4,18 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { ActivityTracker, type Activity } from '@shared/activity'
 import { nextWaiting } from '@shared/attention'
-import { bracketedPaste, findPathLinks, findUrlLinks, quotePath } from '@shared/links'
+import { bracketedPaste, cellRange, findPathLinks, findUrlLinks, logicalLine, quotePath } from '@shared/links'
 import { PROVIDERS } from '@shared/providers'
 import type { AgentConfig } from '@shared/types'
 import { attachPty } from '../ptyBus'
+import { openFileIndex } from '../fileIndex'
 import { useAttention } from '../stores/attention'
 import { useWorkspaces } from '../stores/workspaces'
 
 type Status = 'starting' | 'running' | 'exited' | 'error'
+
+/** A link can span at most this many wrapped rows (keeps matching bounded on huge lines). */
+const MAX_WRAPPED_ROWS = 24
 
 const THEME = {
   background: '#0e0f12',
@@ -389,67 +393,72 @@ export function AgentTerminal({
  * the Code view, at their line, and http(s) URLs in the browser.
  */
 function registerLinks(term: Terminal, agentId: string, cwd: string): IDisposable {
-  // Paths become links only when they exist: checked against the folder's file list, kept fresh.
-  let files: Set<string> | null = null
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const load = () =>
-    window.api.files.all(cwd).then(
-      (all) => void (files = new Set(all)),
-      () => {}
-    )
-  void load()
-  const offChanged = window.api.files.onChanged((root) => {
-    if (root !== cwd) return
-    clearTimeout(timer)
-    timer = setTimeout(load, 500)
-  })
+  // Paths become links only when they exist in the agent's folder.
+  const files = openFileIndex(cwd)
 
-  const lineText = (y: number) => term.buffer.active.getLine(y - 1)?.translateToString(true) ?? ''
-  const range = (y: number, start: number, end: number) => ({ start: { x: start + 1, y }, end: { x: end, y } })
+  /** The rows of the logical line through row `y` (1-based), wrapped rows included, capped. */
+  const logicalRows = (y: number) => {
+    const buffer = term.buffer.active
+    let first = y - 1
+    while (first > 0 && buffer.getLine(first)?.isWrapped && y - 1 - first < MAX_WRAPPED_ROWS) first--
+    let last = y - 1
+    while (buffer.getLine(last + 1)?.isWrapped && last - first < MAX_WRAPPED_ROWS) last++
+    const rows = []
+    for (let i = first; i <= last; i++) {
+      const line = buffer.getLine(i)
+      if (!line) continue
+      const cells = []
+      for (let x = 0; x < line.length; x++) {
+        const cell = line.getCell(x)
+        cells.push({ chars: cell?.getChars() ?? '', width: cell?.getWidth() ?? 1 })
+      }
+      rows.push({ y: i + 1, cells })
+    }
+    return rows
+  }
+
   const withMeta = (event: MouseEvent, open: () => void) => event.metaKey && open()
 
   const provideLinks = (y: number): ILink[] => {
-    const text = lineText(y)
+    const { text, positions } = logicalLine(logicalRows(y))
+    const link = (start: number, end: number, label: string, activate: () => void): ILink => ({
+      range: cellRange(positions, start, end),
+      text: label,
+      decorations: { pointerCursor: true, underline: true },
+      activate: (event) => withMeta(event, activate)
+    })
     const paths = findPathLinks(text)
-      .filter((l) => files?.has(l.path))
-      .map(
-        (l): ILink => ({
-          range: range(y, l.start, l.end),
-          text: text.slice(l.start, l.end),
-          decorations: { pointerCursor: true, underline: true },
-          activate: (event) =>
-            withMeta(event, () => useWorkspaces.getState().requestOpen({ root: cwd, path: l.path, line: l.line, column: l.column }))
-        })
+      .filter((l) => files.has(l.path))
+      .map((l) =>
+        link(l.start, l.end, text.slice(l.start, l.end), () =>
+          useWorkspaces.getState().requestOpen({ root: cwd, path: l.path, line: l.line, column: l.column })
+        )
       )
-    const urls = findUrlLinks(text).map(
-      (l): ILink => ({
-        range: range(y, l.start, l.end),
-        text: l.url,
-        decorations: { pointerCursor: true, underline: true },
-        // The window-open handler in main sends http(s) to the browser and opens nothing in the app.
-        activate: (event) => withMeta(event, () => window.open(l.url))
-      })
-    )
-    return [...paths, ...urls]
+    // The window-open handler in main sends http(s) to the browser and opens nothing in the app.
+    const urls = findUrlLinks(text).map((l) => link(l.start, l.end, l.url, () => void window.open(l.url)))
+    // xterm asks row by row; answer with the links that touch this row.
+    return [...paths, ...urls].filter((l) => l.range.start.y <= y && y <= l.range.end.y)
   }
 
   const provider = term.registerLinkProvider({ provideLinks: (y, callback) => callback(provideLinks(y)) })
 
   // Terminal text is drawn on a canvas, so e2e tests reach the links of a line through this hook.
-  const hooks = (((window as unknown as Record<string, unknown>).__squadstormLinks ??= {}) as Record<string, unknown>)
+  const hooks = ((window as unknown as Record<string, unknown>).__squadstormLinks ??= {}) as Record<string, unknown>
   hooks[agentId] = {
-    ready: () => files !== null,
+    ready: () => files.has('') !== null,
     find: (text: string) => {
-      for (let y = 1; y <= term.buffer.active.length; y++) if (lineText(y).includes(text)) return provideLinks(y)
+      const buffer = term.buffer.active
+      for (let y = 1; y <= buffer.length; y++) {
+        if (buffer.getLine(y - 1)?.translateToString(true).includes(text)) return provideLinks(y)
+      }
       return []
     }
   }
 
   return {
     dispose() {
-      clearTimeout(timer)
-      offChanged()
       provider.dispose()
+      files.dispose()
       delete hooks[agentId]
     }
   }
