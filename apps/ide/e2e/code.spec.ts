@@ -321,8 +321,9 @@ test('code view: long lines wrap to the editor width', async () => {
     .nth(1)
     .evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)))
   expect(rows).toBeGreaterThan(1)
-  // Still one real line: the gutter numbers three lines, and saving writes the file unchanged.
-  await expect(page.locator('.cm-lineNumbers .cm-gutterElement').filter({ hasText: /^\d+$/ })).toHaveText(['1', '2', '3', '4'])
+  // Still one real line (first, long, last, and the empty one after the final newline), and saving
+  // writes the file unchanged.
+  await expect(page.locator('.cm-line')).toHaveCount(4)
   await editor.click()
   await page.keyboard.press('Meta+s')
   await expect.poll(() => readFileSync(join(project, 'notes.txt'), 'utf8')).toBe(content)

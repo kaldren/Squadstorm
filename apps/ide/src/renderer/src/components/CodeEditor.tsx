@@ -203,6 +203,8 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, on
         sendKeymap((from, to) => propsRef.current.onSend(path, from, to)),
         basicSetup,
         editorTheme,
+        // Long lines wrap to the editor width instead of scrolling sideways.
+        EditorView.lineWrapping,
         language.of([]),
         EditorView.updateListener.of((u) => {
           const buffer = buffers.current.get(path)
@@ -418,6 +420,7 @@ function ConflictDiff({ path, disk, mine }: { path: string; disk: string; mine: 
           EditorView.editable.of(false),
           unifiedMergeView({ original: disk, mergeControls: false, gutter: true }),
           ...editorTheme,
+          EditorView.lineWrapping,
           lang.of([])
         ]
       })
