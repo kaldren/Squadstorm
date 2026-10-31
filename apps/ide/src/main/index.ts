@@ -10,7 +10,7 @@ import { gitCommit, gitCommitDiff, gitCommitFiles, gitDiff, gitDiscard, gitLog, 
 import { cloneRepo, githubStatus, listRepos } from './github'
 import { PtyManager } from './pty'
 import { allFiles, searchWorkspace } from './search'
-import { addWorktree, inspectWorktree, mergeWorktree, openWorktreePr, removeWorktree } from './worktrees'
+import { addWorktree, checkName, inspectWorktree, mergeWorktree, openWorktreePr, removeWorktree } from './worktrees'
 import { migrateFromOldNames } from './migrate'
 import { loadState, saveState } from './store'
 
@@ -240,7 +240,10 @@ function registerIpc(): void {
   ipcMain.handle('git:discard', (_e, root: string, change: FileChange) => gitDiscard(root, change))
   ipcMain.handle('git:push', (_e, root: string) => gitPush(root))
 
-  ipcMain.handle('worktrees:add', (_e, root: string, label: string) => addWorktree(root, label))
+  ipcMain.handle('worktrees:add', (_e, root: string, label: string, name?: string) =>
+    addWorktree(root, label, typeof name === 'string' ? name : undefined)
+  )
+  ipcMain.handle('worktrees:checkName', (_e, root: string, name: string) => checkName(root, name))
   ipcMain.handle('worktrees:inspect', (_e, root: string, wt: AgentWorktree) => inspectWorktree(root, wt))
   ipcMain.handle('worktrees:remove', (_e, root: string, wt: AgentWorktree, force: boolean) =>
     removeWorktree(root, wt, force === true)

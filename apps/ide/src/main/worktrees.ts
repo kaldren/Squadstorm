@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { shell } from 'electron'
 import type { WorktreeState } from '@shared/api'
 import type { AgentWorktree } from '@shared/types'
-import { branchName, prCommands, worktreeDir } from '@shared/worktrees'
+import { branchName, nameError, namedBranch, prCommands, worktreeDir } from '@shared/worktrees'
 import { git, gitStatus } from './git'
 import { gitEnv, run } from './github'
 import { resolveCommand } from './shell-env'
@@ -47,13 +47,40 @@ const hasCommits = (root: string) =>
     () => false
   )
 
-/** A new worktree on a new branch, from the workspace's current branch and commit. */
-export async function addWorktree(root: string, label: string): Promise<AgentWorktree> {
+/** Why `branch` can't be a new agent's branch in this workspace, or null when it's free. */
+async function nameTaken(root: string, branch: string): Promise<string | null> {
+  const branchExists = await git(root, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`]).then(
+    () => true,
+    () => false
+  )
+  if (branchExists) return `A branch named ${branch} already exists. Pick another name.`
+  const path = worktreeDir(baseDir(), root, branch)
+  if (await exists(path)) return `A folder for ${branch} already exists at ${path}.`
+  return null
+}
+
+/** Why the typed branch name can't be used, or null when it can; a blank name is always fine (automatic). */
+export async function checkName(root: string, name: string): Promise<string | null> {
+  const text = String(name ?? '')
+  if (!text.trim()) return null
+  return nameError(text) ?? (await nameTaken(root, namedBranch(text)))
+}
+
+/**
+ * A new worktree on a new branch, from the workspace's current branch and commit. The branch is
+ * `squadstorm/<name>` when a name is given, otherwise named after the agent's label.
+ */
+export async function addWorktree(root: string, label: string, name?: string): Promise<AgentWorktree> {
   const { repo, branch: base } = await gitStatus(root)
   if (!repo) throw new Error('This folder is not a git repository.')
   if (!base) throw new Error('The workspace is on a detached HEAD. Check out a branch first.')
   if (!(await hasCommits(root))) throw new Error('The repository has no commits yet. Commit something first.')
-  const branch = branchName(label, randomBytes(2).toString('hex'))
+  const typed = typeof name === 'string' && name.trim() !== ''
+  if (typed) {
+    const problem = await checkName(root, name)
+    if (problem) throw new Error(problem)
+  }
+  const branch = typed ? namedBranch(name) : branchName(label, randomBytes(2).toString('hex'))
   const path = worktreeDir(baseDir(), root, branch)
   await mkdir(dirname(path), { recursive: true })
   await git(root, ['worktree', 'add', '-b', branch, path, 'HEAD'])

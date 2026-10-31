@@ -160,6 +160,96 @@ test("merge brings an agent's commits back", async () => {
   await s.app.close()
 })
 
+/** Adds an agent from the header with Own worktree on, typing `name` as its branch name. */
+async function addNamed(page: Page, provider: string, name: string) {
+  await page.getByRole('button', { name: `+ ${provider}` }).click()
+  await page.getByTestId('branch-name').fill(name)
+  await page.getByTestId('branch-name').press('Enter')
+}
+
+test('a named agent works on its own branch', async () => {
+  const project = repo()
+  const s = await launch(project)
+  await start(s)
+  const tiles = s.page.getByTestId('agent-tile')
+  await expect(tiles).toHaveCount(1)
+
+  await s.page.getByRole('button', { name: '+ Claude' }).click()
+  await expect(s.page.getByTestId('branch-name-preview')).toHaveText('squadstorm/claude-2-… (automatic)')
+  await s.page.getByTestId('branch-name').fill('Login fix')
+  await expect(s.page.getByTestId('branch-name-preview')).toHaveText('squadstorm/login-fix')
+  await s.page.getByTestId('branch-name').press('Enter')
+  await expect(s.page.getByTestId('branch-name')).toHaveCount(0)
+
+  await expect(tiles).toHaveCount(2)
+  const named = tiles.nth(1)
+  await expect(named.getByTestId('agent-branch')).toHaveText('squadstorm/login-fix')
+  const worktree = await cwdOf(s.app, named)
+  expect(basename(worktree)).toBe('login-fix')
+  expect(await output(s.app, named)).toContain('branch=squadstorm/login-fix')
+
+  // The Code view's scope picker lists it under its name.
+  await s.page.getByRole('tab', { name: 'Code' }).click()
+  await expect(s.page.getByTestId('code-scope').locator('option', { hasText: 'squadstorm/login-fix' })).toHaveCount(1)
+  await s.page.getByRole('tab', { name: 'Agents' }).click()
+
+  // Its work merges back like any other agent's.
+  await run(s.page, named, 'echo login > login.txt && git add -A && git commit -qm "Login fix"')
+  await expect.poll(() => git(worktree, 'log', '-1', '--format=%s').trim()).toBe('Login fix')
+  await named.getByTestId('agent-menu').click()
+  await s.page.getByTestId('agent-merge').click()
+  await expect(named.getByTestId('agent-message')).toContainText('Merged 1 commit from Claude 2 into main')
+  expect(git(project, 'log', '--format=%s', 'main')).toContain('Login fix')
+  expect(existsSync(join(project, 'login.txt'))).toBe(true)
+
+  await s.app.close()
+})
+
+test('an empty name gets an automatic branch', async () => {
+  const project = repo()
+  const s = await launch(project)
+  await start(s)
+  const tiles = s.page.getByTestId('agent-tile')
+  await expect(tiles).toHaveCount(1)
+
+  await s.page.getByRole('button', { name: '+ Claude' }).click()
+  await s.page.getByTestId('branch-name').press('Enter')
+  await expect(tiles).toHaveCount(2)
+  await expect(tiles.nth(1).getByTestId('agent-branch')).toHaveText(/^squadstorm\/claude-2-[0-9a-f]{4}$/)
+
+  await s.app.close()
+})
+
+test('a taken name is refused', async () => {
+  const project = repo()
+  git(project, 'branch', 'squadstorm/taken')
+  const s = await launch(project)
+  await start(s)
+  const tiles = s.page.getByTestId('agent-tile')
+  await expect(tiles).toHaveCount(1)
+
+  await addNamed(s.page, 'Claude', 'taken')
+  await expect(s.page.getByTestId('branch-name-error')).toContainText('already exists')
+  await expect(s.page.getByTestId('branch-name')).toHaveValue('taken')
+  await expect(tiles).toHaveCount(1)
+
+  // A name with nothing usable is refused before asking git.
+  await s.page.getByTestId('branch-name').fill('!!!')
+  await s.page.getByTestId('branch-name').press('Enter')
+  await expect(s.page.getByTestId('branch-name-error')).toHaveText('Use letters or digits.')
+
+  // Escape closes it and adds nothing.
+  await s.page.getByTestId('branch-name').press('Escape')
+  await expect(s.page.getByTestId('branch-name')).toHaveCount(0)
+  await expect(tiles).toHaveCount(1)
+  expect(git(project, 'branch', '--list', 'squadstorm/*', '--format=%(refname:short)').trim().split('\n')).toEqual([
+    expect.stringMatching(/^squadstorm\/claude-1-[0-9a-f]{4}$/),
+    'squadstorm/taken'
+  ])
+
+  await s.app.close()
+})
+
 test('removing an agent', async () => {
   const project = repo()
   const s = await launch(project)
@@ -179,6 +269,7 @@ test('removing an agent', async () => {
   // Uncommitted changes: asks first; cancelling keeps everything. (With no agents left, the next one is
   // Claude 1 again.)
   await s.page.getByRole('button', { name: '+ Claude' }).click()
+  await s.page.getByTestId('branch-name').press('Enter')
   await expect(tiles).toHaveCount(1)
   const dirty = await cwdOf(s.app, tiles.first())
   await run(s.page, tiles.first(), 'echo wip > wip.txt')
@@ -196,6 +287,7 @@ test('removing an agent', async () => {
 
   // Commits that aren't merged: the worktree goes, the branch stays, and it says so.
   await s.page.getByRole('button', { name: '+ Claude' }).click()
+  await s.page.getByTestId('branch-name').press('Enter')
   const committed = await cwdOf(s.app, tiles.first())
   await run(s.page, tiles.first(), 'echo done > done.txt && git add -A && git commit -qm "Unmerged work"')
   await expect.poll(() => git(committed, 'log', '-1', '--format=%s').trim()).toBe('Unmerged work')
