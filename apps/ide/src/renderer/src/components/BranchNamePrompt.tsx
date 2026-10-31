@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { nameError, nameSlug, slug } from '@shared/worktrees'
 
+// ipcMain.handle rejections arrive wrapped as "Error invoking remote method 'x': Error: …".
+const ipcMessage = (e: unknown) =>
+  (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+
 /**
  * Asks for an optional branch name for a new isolated agent. Enter adds it (blank: automatic name),
  * Escape or a click outside cancels. A name that can't be used stays in the field with the reason.
@@ -27,7 +31,8 @@ export function BranchNamePrompt({
   useEffect(() => {
     live.current = true
     const close = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose()
+      // The + button that opened it sits next to it, in the same wrapper; it toggles the prompt itself.
+      if (!ref.current?.parentElement?.contains(e.target as Node)) onClose()
     }
     window.addEventListener('mousedown', close, true)
     return () => {
@@ -48,7 +53,7 @@ export function BranchNamePrompt({
       if (taken) setError(taken)
       else onAdd(text.trim())
     } catch (e) {
-      if (live.current) setError(e instanceof Error ? e.message : String(e))
+      if (live.current) setError(ipcMessage(e))
     } finally {
       if (live.current) setChecking(false)
     }
@@ -69,6 +74,8 @@ export function BranchNamePrompt({
         aria-label="Branch name"
         placeholder="automatic"
         spellCheck={false}
+        // The name is checked as it was when Enter was pressed; don't let it change underneath.
+        readOnly={checking}
         className="w-full rounded border border-line bg-raised px-2 py-1 text-fg outline-none focus:border-accent"
         value={text}
         onChange={(e) => {
@@ -86,7 +93,7 @@ export function BranchNamePrompt({
         }}
       />
       <div className="mt-1.5 truncate font-mono text-[11px] text-muted" data-testid="branch-name-preview">
-        {text.trim() && typed ? `squadstorm/${typed}` : `squadstorm/${slug(nextLabel)}-… (automatic)`}
+        {!text.trim() ? `squadstorm/${slug(nextLabel)}-… (automatic)` : typed ? `squadstorm/${typed}` : 'Use letters or digits.'}
       </div>
       {error && (
         <div role="alert" data-testid="branch-name-error" className="mt-1 text-[11px] text-danger">

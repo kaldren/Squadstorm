@@ -65,3 +65,11 @@ Step 2: it decides which branch a new worktree uses, and a mistake could reuse a
 - All → `pnpm typecheck && pnpm test && pnpm test:e2e` output pasted in the PR
 
 ## Deviations
+- 2026-10-31 — From review, failing test first (`› a taken name is refused`): `nameTaken` uses one `git for-each-ref` over `refs/heads/<branch>` (which also matches branches nested under it) and `refs/remotes/*/<branch>`, instead of `rev-parse refs/heads/<branch>`. The same test now calls `worktrees.add` directly with a taken name, so main's own check is exercised.
+- 2026-10-31 — From review (nits) in `BranchNamePrompt`:
+  - the field is read-only while the name is being checked, so the agent gets the name that was checked;
+  - a click on the + button that opened the prompt no longer counts as "outside", so the button toggles the prompt instead of reopening it empty;
+  - IPC errors lose their "Error invoking remote method" prefix, like elsewhere;
+  - the preview says "Use letters or digits." instead of the automatic name when the text has none.
+- 2026-10-31 — The prompt has a `branch-name-preview` test id, and a blank name skips the `checkName` round-trip. Small additions, noted for completeness.
+

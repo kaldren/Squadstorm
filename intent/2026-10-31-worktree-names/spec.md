@@ -65,3 +65,4 @@ From intent.md:
 - Same name for the worktree folder? **Answered:** yes, it already follows the branch (`worktreeDir`).
 
 ## Changelog
+- 2026-10-31 — R4's "already exists" now also counts a branch of that name on a remote, and branches nested under the name (`squadstorm/<name>/…`). Reason: review found that a name reused after its PR branch was pushed, merged and deleted locally would push new work into the old, still-open PR, breaking the intent's "never overwrite or reuse a branch"; a nested branch made `git worktree add` fail with a raw git error. AC3 covers both, and also calls `worktrees.add` directly to check main refuses on its own (AC5).

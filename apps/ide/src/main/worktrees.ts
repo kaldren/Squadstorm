@@ -47,13 +47,16 @@ const hasCommits = (root: string) =>
     () => false
   )
 
-/** Why `branch` can't be a new agent's branch in this workspace, or null when it's free. */
+/**
+ * Why `branch` can't be a new agent's branch in this workspace, or null when it's free. Taken means a
+ * local branch of that name or nested under it (git can't have both), or the same branch on a remote:
+ * reusing a name pushed for a PR would push new work into that old PR.
+ */
 async function nameTaken(root: string, branch: string): Promise<string | null> {
-  const branchExists = await git(root, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`]).then(
-    () => true,
-    () => false
+  const refs = await git(root, ['for-each-ref', '--format=%(refname)', `refs/heads/${branch}`, `refs/remotes/*/${branch}`]).catch(
+    () => ''
   )
-  if (branchExists) return `A branch named ${branch} already exists. Pick another name.`
+  if (refs.trim()) return `A branch named ${branch} already exists. Pick another name.`
   const path = worktreeDir(baseDir(), root, branch)
   if (await exists(path)) return `A folder for ${branch} already exists at ${path}.`
   return null
