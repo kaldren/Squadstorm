@@ -5,9 +5,15 @@ import { join } from 'node:path'
 
 // Stand-in for the agent CLIs: prints a path, a missing path and two URLs, then echoes its input
 // (the terminal echoes what's typed or pasted; `cat` repeats a line once it's submitted).
+const LONG_URL = `https://example.com/long?${'q=1&'.repeat(80)}end`
 const FAKE_AGENT = `
 echo "see src/a.ts:3 and src/missing.ts:1"
 echo "docs at https://example.com/x and file:///etc/passwd"
+echo "修正 see src/a.ts:3"
+echo "auth at ${LONG_URL}"
+if [ -n "$SQUADSTORM_E2E_LATER" ]; then
+  (while [ ! -f "$SQUADSTORM_E2E_LATER" ]; do sleep 0.2; done; echo "made src/new.ts:1") &
+fi
 exec cat
 `
 
@@ -17,7 +23,7 @@ interface Session {
   project: string
 }
 
-async function launch(): Promise<Session> {
+async function launch(env: Record<string, string> = {}): Promise<Session> {
   const project = realpathSync(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-links-')))
   mkdirSync(join(project, 'src'))
   writeFileSync(join(project, 'src', 'a.ts'), ['line 1', 'line 2', 'line 3', 'line 4', 'line 5'].join('\n') + '\n')
@@ -27,7 +33,8 @@ async function launch(): Promise<Session> {
       ...process.env,
       SQUADSTORM_E2E: '1',
       SQUADSTORM_USER_DATA: mkdtempSync(join(tmpdir(), 'squadstorm-e2e-data-')),
-      SQUADSTORM_AGENT_CMD: FAKE_AGENT
+      SQUADSTORM_AGENT_CMD: FAKE_AGENT,
+      ...env
     }
   })
   await app.evaluate(({ dialog }, folder) => {
@@ -139,7 +146,7 @@ test('click a path or a URL in agent output', async () => {
   await expect(page.getByTestId('code-editor').locator('.cm-activeLine')).toHaveText('line 3')
 
   await activate('docs at', true)
-  expect(await app.evaluate(() => (globalThis as any).__squadstormOpened)).toEqual(['https://example.com/x'])
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__squadstormOpened)).toEqual(['https://example.com/x'])
 
   await app.close()
 })
@@ -168,3 +175,57 @@ test('drop a file on a tile', async () => {
 
   await app.close()
 })
+
+test('links sit on the right cells after wide characters and span wrapped lines', async () => {
+  const { app, page } = await launch()
+  const claude = page.getByTestId('agent-tile').nth(0)
+  const id = await claude.getAttribute('data-agent-id')
+  await expect.poll(() => output(app, claude)).toContain('auth at')
+  await expect.poll(() => page.evaluate((agent) => (window as any).__squadstormLinks[agent!].ready(), id)).toBe(true)
+  const links = (line: string) =>
+    page.evaluate(
+      ([agent, text]) =>
+        (window as any).__squadstormLinks[agent].find(text).map((l: { text: string; range: unknown }) => ({ text: l.text, range: l.range })),
+      [id!, line]
+    )
+
+  // 修 and 正 take two cells each: the path starts in cell 10, not 8.
+  const [wide] = await links('修正 see')
+  expect(wide.text).toBe('src/a.ts:3')
+  expect((wide.range as { start: { x: number } }).start.x).toBe(10)
+
+  // A URL longer than the tile is wide wraps, and is still one whole link.
+  const [url] = await links('auth at')
+  expect(url.text).toBe(LONG_URL)
+  const range = url.range as { start: { y: number }; end: { y: number } }
+  expect(range.end.y).toBeGreaterThan(range.start.y)
+  await app.close()
+})
+
+test('paths of files created later become links without opening the code view', async () => {
+  const later = join(mkdtempSync(join(tmpdir(), 'squadstorm-e2e-later-')), 'go')
+  const { app, page, project } = await launch({ SQUADSTORM_E2E_LATER: later })
+  const claude = page.getByTestId('agent-tile').nth(0)
+  const id = await claude.getAttribute('data-agent-id')
+  await expect.poll(() => page.evaluate((agent) => (window as any).__squadstormLinks[agent!].ready(), id)).toBe(true)
+
+  writeFileSync(join(project, 'src', 'new.ts'), 'export {}\n')
+  writeFileSync(later, '')
+  await expect.poll(() => output(app, claude)).toContain('made src/new.ts:1')
+  await expect
+    .poll(() => page.evaluate((agent) => (window as any).__squadstormLinks[agent!].find('made src/new.ts').map((l: { text: string }) => l.text), id))
+    .toEqual(['src/new.ts:1'])
+  await app.close()
+})
+
+test('the window never navigates away from the app', async () => {
+  const { app, page } = await launch()
+  await page.evaluate(() => {
+    location.href = 'file:///etc/hosts'
+  })
+  await page.waitForTimeout(500)
+  await expect(page.getByTestId('agent-tile')).toHaveCount(2)
+  expect(page.url()).not.toContain('/etc/hosts')
+  await app.close()
+})
+

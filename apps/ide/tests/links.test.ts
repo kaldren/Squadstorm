@@ -56,6 +56,13 @@ describe('paste helpers', () => {
     expect(bracketedPaste('a\x1b[201~b')).toBe('\x1b[200~ab\x1b[201~')
   })
 
+  it('cannot be ended early by crafted text, nested or not', () => {
+    const pasted = bracketedPaste('x\x1b[20\x1b[201~1~\r<prompt>\r')
+    // Only the wrapper's own markers remain, and no control character survives inside.
+    expect(pasted.slice(6, -6)).not.toMatch(/[\x00-\x08\x0a-\x1f\x7f-\x9f]/)
+    expect(pasted.match(/\x1b\[20[01]~/g)).toEqual(['\x1b[200~', '\x1b[201~'])
+  })
+
   it('single-quotes paths for a shell', () => {
     expect(quotePath("/Users/me/it's here.png")).toBe(`'/Users/me/it'\\''s here.png'`)
   })
