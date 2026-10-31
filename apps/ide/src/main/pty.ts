@@ -14,7 +14,7 @@ interface Session {
   alive: boolean
 }
 
-type Send = (channel: 'pty:data' | 'pty:exit', id: string, payload: string | number) => void
+type Send = (channel: 'pty:data' | 'pty:exit' | 'pty:session', id: string, payload: string | number) => void
 
 export class PtyManager {
   private sessions = new Map<string, Session>()
@@ -56,10 +56,10 @@ export class PtyManager {
     return this.launch(req, req.mode === 'resume' ? 'resume' : 'fresh')
   }
 
-  private async launch(req: SpawnRequest, requested: LaunchMode, backlog = ''): Promise<SpawnResult> {
+  private async launch(req: SpawnRequest, requested: LaunchMode, backlog = '', sessionId = req.sessionId): Promise<SpawnResult> {
     const path = await shellPath()
     const provider = PROVIDERS[req.provider]
-    const { args: launch, mode } = launchArgs(req.provider, requested, { id: req.id, soleInFolder: req.soleInFolder === true })
+    const { args: launch, mode } = launchArgs(req.provider, requested, { id: String(sessionId), soleInFolder: req.soleInFolder === true })
     // SQUADSTORM_AGENT_CMD swaps every agent for an arbitrary shell command (used by e2e tests),
     // which still gets the provider's args as "$@".
     const override = process.env.SQUADSTORM_AGENT_CMD
@@ -94,12 +94,16 @@ export class PtyManager {
       session.alive = false
       // A killed session has already been replaced or removed; don't report its exit.
       if (this.sessions.get(req.id) !== session) return
-      // Nothing to resume (the conversation is gone): start a new one in the same tile, once.
+      // It couldn't be resumed: start a new conversation in the same tile, once, on a new session id
+      // (the old id may still be taken by the conversation that wouldn't resume).
       if (mode === 'resume' && exitCode !== 0 && Date.now() - startedAt < RESUME_FAILED_MS) {
         session.backlog = (session.backlog + RESUME_FAILED_NOTE).slice(-BACKLOG_LIMIT)
         this.send('pty:data', req.id, RESUME_FAILED_NOTE)
-        void this.launch(req, 'fresh', session.backlog).then((result) => {
-          if (result.error) this.send('pty:exit', req.id, exitCode)
+        void this.launch(req, 'fresh', session.backlog, req.nextSessionId).then((result) => {
+          if (result.error) {
+            this.send('pty:data', req.id, `\x1b[31m${result.error}\x1b[0m\r\n`)
+            this.send('pty:exit', req.id, exitCode)
+          } else this.send('pty:session', req.id, String(req.nextSessionId))
         })
         return
       }

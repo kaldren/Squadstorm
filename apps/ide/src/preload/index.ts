@@ -71,7 +71,8 @@ const api: SquadstormApi = {
     resize: (id, cols, rows) => ipcRenderer.send('pty:resize', id, cols, rows),
     kill: (id) => ipcRenderer.invoke('pty:kill', id),
     onData: (listener) => subscribe<string>('pty:data', listener),
-    onExit: (listener) => subscribe<number>('pty:exit', listener)
+    onExit: (listener) => subscribe<number>('pty:exit', listener),
+    onSession: (listener) => subscribe<string>('pty:session', listener)
   }
 }
 

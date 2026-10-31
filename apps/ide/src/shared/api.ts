@@ -14,6 +14,10 @@ export interface SpawnRequest {
   mode: LaunchMode
   /** No other agent of the same CLI runs in `cwd` (Codex can only resume then). */
   soleInFolder: boolean
+  /** The CLI session to start or resume. */
+  sessionId: string
+  /** A new session id, used if resuming fails and the agent has to start over. */
+  nextSessionId: string
 }
 
 export interface SpawnResult {
@@ -138,5 +142,7 @@ export interface SquadstormApi {
     kill(id: string): Promise<void>
     onData(listener: (id: string, data: string) => void): () => void
     onExit(listener: (id: string, exitCode: number) => void): () => void
+    /** The agent started over on a new session (its old one couldn't be resumed). */
+    onSession(listener: (id: string, sessionId: string) => void): () => void
   }
 }

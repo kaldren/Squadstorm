@@ -83,8 +83,8 @@ export function AgentTerminal({
   const namesRef = useRef({ label: agent.label, workspaceName })
   namesRef.current = { label: agent.label, workspaceName }
   // Read when (re)starting, without restarting the terminal when they change.
-  const launchRef = useRef({ started: !!agent.started, soleInFolder })
-  launchRef.current = { started: !!agent.started, soleInFolder }
+  const launchRef = useRef({ started: !!agent.started, soleInFolder, sessionId: agent.sessionId ?? agent.id })
+  launchRef.current = { started: !!agent.started, soleInFolder, sessionId: agent.sessionId ?? agent.id }
   const focusRequest = useAttention((s) => s.focusRequest)
 
   useEffect(() => {
@@ -201,7 +201,7 @@ export function AgentTerminal({
     const start = async () => {
       attached = false
       setStatus('starting')
-      const { started, soleInFolder: sole } = launchRef.current
+      const { started, soleInFolder: sole, sessionId } = launchRef.current
       const result = await window.api.pty.spawn({
         id: agent.id,
         provider: agent.provider,
@@ -210,7 +210,9 @@ export function AgentTerminal({
         rows: term.rows,
         // An agent that ran before picks its conversation back up: after a relaunch, and on Restart.
         mode: started ? 'resume' : 'fresh',
-        soleInFolder: sole
+        soleInFolder: sole,
+        sessionId,
+        nextSessionId: crypto.randomUUID()
       })
       if (result.error) {
         setStatus('error')
@@ -242,6 +244,12 @@ export function AgentTerminal({
     void start()
 
     const links = registerLinks(term, agent.id, cwd)
+    // Its old session couldn't be resumed and it started over on a new one: resume that one next time.
+    const offSession = window.api.pty.onSession((id, sessionId) => {
+      if (id !== agent.id) return
+      launchRef.current.sessionId = sessionId
+      useWorkspaces.getState().setSessionId(agent.id, sessionId)
+    })
 
     const input = term.onData((data) => {
       tracker.input(Date.now())
@@ -266,6 +274,7 @@ export function AgentTerminal({
       bell.dispose()
       osc.dispose()
       links.dispose()
+      offSession()
       useAttention.getState().remove(agent.id)
       written.dispose()
       bufferChange.dispose()

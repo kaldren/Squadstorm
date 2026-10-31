@@ -67,3 +67,7 @@ From intent.md:
 - Does closing the window get the guard too? **Proposed:** yes (concern 4).
 
 ## Changelog
+- 2026-10-31 — AC3 and Design: when resuming fails, the agent starts over on a **new** session id (remembered as `AgentConfig.sessionId` and resumed from then on), not its own id again. Reason: found in review and checked against Claude Code, a session that exists but won't resume keeps its id taken ("already in use"), so retrying with the same id would fail on every start.
+- 2026-10-31 — R2: an agent that ever shared its folder with another agent of the same CLI, in any workspace, is remembered (`sharedFolder`) and never resumes with `--last`. Reason: the other agent's sessions stay in the folder after it's removed.
+- 2026-10-31 — AC6: `smoke.spec.ts` has one updated assertion (a fresh Claude now starts with `--session-id <id>`), as the plan foresaw; it isn't "unchanged".
+

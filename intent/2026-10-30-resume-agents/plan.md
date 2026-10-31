@@ -68,4 +68,11 @@ Step 2, changing launch arguments for real CLIs. Before wiring it in, the plan's
 - 2026-10-30 — `launchArgs` returns the mode it actually used, so a Codex agent that shares its folder never takes the resume fallback path.
 - 2026-10-30 — After quitting is confirmed once, closing the window doesn't ask again; a new window starts over.
 - 2026-10-30 — The quit e2e checks "no question once quiet" by keeping Cancel as the e2e answer: the app can only close if nobody asked.
+- 2026-10-31 — From review, failing tests first:
+  - Codex resume uses `soleInFolder` from `src/shared/sessions.ts` (unit-tested): it counts agents in every workspace, and an agent that ever shared its folder is marked `sharedFolder` for good, so removing the other agent no longer lets it pick up that agent's conversation;
+  - a resume that fails starts over on a new session id (`nextSessionId` from the renderer, reported back on `pty:session`, saved as `AgentConfig.sessionId`), so a session that exists but won't resume can't block the agent;
+  - saving state is serialized in main, so bursts of saves (every new agent marks itself started) can't corrupt `state.json`;
+  - session ids that aren't UUIDs get no session arguments (they come from editable state and could read as flags);
+  - the quit/close question always goes through `dialog.showMessageBoxSync` (e2e replaces it with a counting stub at startup instead of a code branch) and says "Close" or "Quit" as appropriate; a window-close test was added; the working count resets when the page reloads; a failed fresh retry shows its error.
+- 2026-10-31 — Not done (review nits, accepted): Terminal tiles printing output count as working for the quit question; a resume killed by a signal (exit code 0) doesn't take the fallback; whether `codex resume --last` exits non-zero when there's nothing to resume isn't verified against the real CLI.
 

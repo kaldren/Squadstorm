@@ -14,6 +14,16 @@ import { addWorktree, inspectWorktree, mergeWorktree, openWorktreePr, removeWork
 import { migrateFromOldNames } from './migrate'
 import { loadState, saveState } from './store'
 
+// e2e tests: the quit question answers `__squadstormQuitAnswer` (quit unless a test says otherwise)
+// and is counted; a test can still replace this with its own stub.
+if (process.env.SQUADSTORM_E2E) {
+  const hooks = globalThis as { __squadstormQuitAsked?: number; __squadstormQuitAnswer?: number }
+  dialog.showMessageBoxSync = (() => {
+    hooks.__squadstormQuitAsked = (hooks.__squadstormQuitAsked ?? 0) + 1
+    return hooks.__squadstormQuitAnswer ?? 0
+  }) as typeof dialog.showMessageBoxSync
+}
+
 // Lets tests run against a throwaway profile.
 if (process.env.SQUADSTORM_USER_DATA) app.setPath('userData', process.env.SQUADSTORM_USER_DATA)
 else migrateFromOldNames()
@@ -83,29 +93,22 @@ let workingCount = 0
 /** Set once the user agreed to stop working agents (or none were working), so nobody asks twice. */
 let stopConfirmed = false
 
-/**
- * Quitting or closing the window stops every agent. With some still working, ask first. e2e tests
- * answer through `__squadstormQuitAnswer` (0 quit, 1 cancel; quit by default) and count the questions.
- */
+/** True from `before-quit` on, to word the question for quitting rather than closing the window. */
+let quitting = false
+
+/** Quitting or closing the window stops every agent. With some still working, ask first. */
 function confirmStop(): boolean {
   if (stopConfirmed || workingCount === 0) return true
   const message = `${workingCount} agent${workingCount === 1 ? ' is' : 's are'} still working`
-  let answer: number
-  if (process.env.SQUADSTORM_E2E) {
-    const hooks = globalThis as { __squadstormQuitAsked?: number; __squadstormQuitAnswer?: number }
-    hooks.__squadstormQuitAsked = (hooks.__squadstormQuitAsked ?? 0) + 1
-    answer = hooks.__squadstormQuitAnswer ?? 0
-  } else {
-    const options = {
-      type: 'warning' as const,
-      buttons: ['Quit', 'Cancel'],
-      defaultId: 1,
-      cancelId: 1,
-      message,
-      detail: 'Quitting stops them in the middle of their work. Their conversations resume next time.'
-    }
-    answer = mainWindow ? dialog.showMessageBoxSync(mainWindow, options) : dialog.showMessageBoxSync(options)
+  const options = {
+    type: 'warning' as const,
+    buttons: [quitting ? 'Quit' : 'Close', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    message,
+    detail: `${quitting ? 'Quitting' : 'Closing the window'} stops them in the middle of their work.`
   }
+  const answer = mainWindow ? dialog.showMessageBoxSync(mainWindow, options) : dialog.showMessageBoxSync(options)
   stopConfirmed = answer === 0
   return stopConfirmed
 }
@@ -134,8 +137,11 @@ function createWindow(): void {
   })
 
   mainWindow.once('ready-to-show', () => mainWindow?.show())
-  // A fresh page starts with no waiting agents (it re-counts them), and a closed window has none.
-  mainWindow.webContents.on('did-start-loading', () => setBadge(0))
+  // A fresh page starts with no waiting or working agents (it re-counts them).
+  mainWindow.webContents.on('did-start-loading', () => {
+    setBadge(0)
+    workingCount = 0
+  })
 
   // Links printed by agents (auth URLs, docs) open in the real browser, never inside the app.
   // The window only ever shows the app: a file dropped outside a tile, or a stray link, must not
@@ -259,7 +265,10 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', (e) => {
-  if (!confirmStop()) {
+  quitting = true
+  const confirmed = confirmStop()
+  quitting = false
+  if (!confirmed) {
     e.preventDefault()
     return
   }

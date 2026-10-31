@@ -83,7 +83,10 @@ test('a failed resume starts fresh with a note', async () => {
   page = await app.firstWindow()
   const tile = page.getByTestId('agent-tile')
   await expect.poll(() => output(app, tile)).toContain("Couldn't resume the previous conversation; started a new one")
-  await expect.poll(() => output(app, tile)).toContain(`args=[--session-id ${id}]`)
+  // It starts over on a new session id: the old one may still be taken by the conversation that
+  // wouldn't resume (spec Changelog, 2026-10-31).
+  await expect.poll(() => output(app, tile)).toMatch(/args=\[--session-id [0-9a-f-]{36}\]/)
+  expect(await output(app, tile)).not.toContain(`args=[--session-id ${id}]`)
   // Still running: the tile never showed the failed attempt as an exit.
   await expect(tile.getByRole('button', { name: 'Restart' })).toHaveCount(0)
   await app.close()
@@ -164,6 +167,9 @@ test('closing the window asks too, through the real dialog call', async () => {
   expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1)
 
   writeFileSync(done, '')
+  await app.evaluate(({ dialog }) => {
+    dialog.showMessageBoxSync = (() => 0) as typeof dialog.showMessageBoxSync
+  })
   await app.close()
 })
 

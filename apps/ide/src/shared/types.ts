@@ -17,6 +17,10 @@ export interface AgentConfig {
   worktree?: AgentWorktree
   /** It has run before, so the next launch resumes its conversation. */
   started?: boolean
+  /** The CLI session it resumes, when not its own id (after its first session couldn't be resumed). */
+  sessionId?: string
+  /** Another agent of the same CLI worked in its folder at some point, so "the newest session there" may not be its own. */
+  sharedFolder?: boolean
 }
 
 export interface Workspace {

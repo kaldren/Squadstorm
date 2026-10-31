@@ -4,7 +4,7 @@ export type Provider = 'claude' | 'codex' | 'terminal'
 export type LaunchMode = 'fresh' | 'resume'
 
 export interface SessionContext {
-  /** The agent's id, a v4 UUID. */
+  /** The agent's session id, a UUID (its own id unless its first session couldn't be resumed). */
   id: string
   /** No other agent of the same CLI runs in the same folder. */
   soleInFolder: boolean
@@ -55,13 +55,16 @@ export const PROVIDERS: Record<Provider, ProviderInfo> = {
 
 export const PROVIDER_IDS = Object.keys(PROVIDERS) as Provider[]
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 /**
  * The arguments an agent CLI starts with: its session arguments first (Codex's `resume` is a
  * subcommand), then the provider's own. Falls back to a fresh start when resuming isn't possible.
  */
 export function launchArgs(provider: Provider, mode: LaunchMode, ctx: SessionContext): { args: string[]; mode: LaunchMode } {
   const info = PROVIDERS[provider]
-  const session = info.session?.(ctx)
+  // Ids come from saved state: anything but a UUID could be read as a flag, so it gets no session.
+  const session = UUID.test(ctx.id) ? info.session?.(ctx) : undefined
   if (!session) return { args: info.args, mode: 'fresh' }
   if (mode === 'resume' && session.resume) return { args: [...session.resume, ...info.args], mode: 'resume' }
   return { args: [...session.fresh, ...info.args], mode: 'fresh' }
