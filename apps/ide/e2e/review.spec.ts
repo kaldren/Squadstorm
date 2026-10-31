@@ -258,6 +258,8 @@ test('the undo toast stays clickable on a small window', async () => {
   await expect.poll(() => read(s, 'f0.ts')).toBe(lines(40, { 30: 'more 0' }))
   // Scroll a file's header right under the toast (on CI's smaller screen that happened by itself);
   // the toast must still be the one that gets the click.
+  await expect(s.page.getByTestId('undo-discard')).toBeVisible()
+  await expect(section(s, 'f4.ts').getByTestId('discard-file')).toBeAttached()
   const onTop = await s.page.evaluate(() => {
     const undo = document.querySelector('[data-testid="undo-discard"]')!
     const list = document.querySelector('[data-testid="review-view"] .overflow-y-auto') as HTMLElement
