@@ -1,8 +1,8 @@
 import type { FileEntry, ReadResult } from './files'
 import type { SearchQuery, SearchResult } from './search'
-import type { Commit, DiffSides, FileChange, GitStatus } from './git'
-import type { AppState } from './types'
-import type { Provider } from './providers'
+import type { Commit, DiffSides, FileChange, GitStatus, LineStats } from './git'
+import type { AgentWorktree, AppState } from './types'
+import type { LaunchMode, Provider } from './providers'
 
 export interface SpawnRequest {
   id: string
@@ -10,6 +10,14 @@ export interface SpawnRequest {
   cwd: string
   cols: number
   rows: number
+  /** Resume the agent's previous conversation, or start a new one. */
+  mode: LaunchMode
+  /** No other agent of the same CLI runs in `cwd` (Codex can only resume then). */
+  soleInFolder: boolean
+  /** The CLI session to start or resume. */
+  sessionId: string
+  /** A new session id, used if resuming fails and the agent has to start over. */
+  nextSessionId: string
 }
 
 export interface SpawnResult {
@@ -41,6 +49,15 @@ export interface CloneResult {
   reused: boolean
 }
 
+/** What removing an agent's worktree would lose. */
+export interface WorktreeState {
+  exists: boolean
+  /** Uncommitted changes in the worktree. */
+  changes: number
+  /** Commits on its branch that the base lacks; null when the base is gone. */
+  ahead: number | null
+}
+
 /** A macOS notification for an agent that needs you. */
 export interface AttentionNotice {
   agentId: string
@@ -54,6 +71,8 @@ export interface SquadstormApi {
     save(state: AppState): Promise<void>
   }
   pickFolder(): Promise<string | null>
+  /** Absolute path of a file dropped from Finder ('' for files that aren't on disk). */
+  pathForFile(file: File): string
   /** Absolute path of each provider's CLI, or null when it is not on PATH. */
   providers(): Promise<ProviderAvailability>
   github: {
@@ -72,6 +91,8 @@ export interface SquadstormApi {
     search(root: string, query: SearchQuery): Promise<SearchResult>
     read(root: string, path: string): Promise<ReadResult>
     write(root: string, path: string, content: string): Promise<void>
+    /** Writes only if the file still holds `expected` (null: absent); rejects otherwise. */
+    writeIfUnchanged(root: string, path: string, expected: string | null, content: string): Promise<void>
     watch(root: string): void
     unwatch(root: string): void
     onChanged(listener: (root: string, paths: string[]) => void): () => void
@@ -86,10 +107,24 @@ export interface SquadstormApi {
     commitDiff(root: string, hash: string, path: string, from?: string): Promise<DiffSides>
     /** `from` is the old path of a renamed file. */
     diff(root: string, path: string, from?: string): Promise<DiffSides>
-    /** Stages everything and commits it. */
-    commit(root: string, message: string): Promise<void>
+    /** Stages everything and commits it, or only `paths` when given. */
+    commit(root: string, message: string, paths?: string[]): Promise<void>
+    /** Lines added and removed per changed file. */
+    numstat(root: string): Promise<Record<string, LineStats>>
+    /** Throws away a file's uncommitted change (new files go to the Trash). */
+    discard(root: string, change: FileChange): Promise<void>
     /** Pushes the current branch, publishing it to origin if it has no upstream yet. */
     push(root: string): Promise<void>
+  }
+  /** Agent worktrees; `root` is always the workspace folder. */
+  worktrees: {
+    add(root: string, label: string): Promise<AgentWorktree>
+    inspect(root: string, worktree: AgentWorktree): Promise<WorktreeState>
+    /** `force` discards uncommitted changes. */
+    remove(root: string, worktree: AgentWorktree, force: boolean): Promise<{ branchKept: boolean }>
+    merge(root: string, worktree: AgentWorktree): Promise<{ commits: number }>
+    /** Resolves to the PR's URL. */
+    openPr(root: string, worktree: AgentWorktree): Promise<string>
   }
   attention: {
     /** Shows a macOS notification; clicking it brings the window forward and reports `onClicked`. */
@@ -97,6 +132,8 @@ export interface SquadstormApi {
     /** How many agents are waiting, shown on the dock icon (0 clears it). */
     badge(count: number): void
     onClicked(listener: (agentId: string) => void): () => void
+    /** How many agents are working: quitting while some are asks first. */
+    working(count: number): void
   }
   pty: {
     spawn(req: SpawnRequest): Promise<SpawnResult>
@@ -105,5 +142,7 @@ export interface SquadstormApi {
     kill(id: string): Promise<void>
     onData(listener: (id: string, data: string) => void): () => void
     onExit(listener: (id: string, exitCode: number) => void): () => void
+    /** The agent started over on a new session (its old one couldn't be resumed). */
+    onSession(listener: (id: string, sessionId: string) => void): () => void
   }
 }

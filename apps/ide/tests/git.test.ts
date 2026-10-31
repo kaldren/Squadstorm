@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseLog, parseNameStatus, parseStatus } from '../src/shared/git'
+import { commitPathspec, parseLog, parseNameStatus, parseNumstat, parseStatus } from '../src/shared/git'
 
 const z = (...records: string[]) => records.join('\0') + '\0'
 
@@ -58,3 +58,32 @@ describe('parseNameStatus', () => {
     expect(parseNameStatus('')).toEqual([])
   })
 })
+
+describe('parseNumstat', () => {
+  it('reads counts, binary files and renames', () => {
+    const out = z('3\t1\tsrc/a.ts', '-\t-\tlogo.png', '2\t0\t', 'old/name.ts', 'new/name.ts', '0\t5\tgone.ts')
+    expect(parseNumstat(out)).toEqual({
+      'src/a.ts': { added: 3, removed: 1 },
+      'logo.png': { added: null, removed: null },
+      'new/name.ts': { added: 2, removed: 0 },
+      'gone.ts': { added: 0, removed: 5 }
+    })
+  })
+
+  it('is empty for no output', () => {
+    expect(parseNumstat('')).toEqual({})
+  })
+})
+
+describe('commitPathspec', () => {
+  it('commits only the selected files, with the old path of a rename', () => {
+    const changes = [
+      { path: 'a.ts', kind: 'M' as const },
+      { path: 'new.ts', kind: 'R' as const, from: 'old.ts' },
+      { path: 'b.ts', kind: 'A' as const }
+    ]
+    expect(commitPathspec(changes, new Set(['new.ts', 'b.ts']))).toEqual(['old.ts', 'new.ts', 'b.ts'])
+    expect(commitPathspec(changes, new Set())).toEqual([])
+  })
+})
+

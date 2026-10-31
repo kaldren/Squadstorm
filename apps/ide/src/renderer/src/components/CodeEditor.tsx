@@ -8,6 +8,7 @@ import { unifiedMergeView } from '@codemirror/merge'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { basicSetup } from 'codemirror'
 import { diskChange } from '@shared/conflict'
+import { sendKeymap } from '../sendKeymap'
 
 interface Props {
   root: string
@@ -18,6 +19,8 @@ interface Props {
   onDirty(path: string, dirty: boolean): void
   /** The file changed on disk while it had unsaved edits, or that was resolved. */
   onConflict(path: string, conflicted: boolean): void
+  /** ⌘L: send these lines (or the whole file) to an agent. */
+  onSend(path: string, from?: number, to?: number): void
 }
 
 export interface Reveal {
@@ -60,7 +63,7 @@ export const editorTheme = [
   )
 ]
 
-export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict }: Props) {
+export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, onSend }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const buffers = useRef(new Map<string, Buffer>())
@@ -73,8 +76,8 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict }: 
   /** A reveal waiting for its file to load or come on screen. */
   const pendingReveal = useRef<Reveal | null>(null)
   // Extensions are built once per file, so they reach the latest props through refs.
-  const propsRef = useRef({ root, onDirty, onConflict })
-  propsRef.current = { root, onDirty, onConflict }
+  const propsRef = useRef({ root, onDirty, onConflict, onSend })
+  propsRef.current = { root, onDirty, onConflict, onSend }
 
   const liveState = (path: string, buffer: Buffer & { state: EditorState }) =>
     shownRef.current === path && viewRef.current ? viewRef.current.state : buffer.state
@@ -195,6 +198,7 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict }: 
       doc: content,
       extensions: [
         keymap.of([indentWithTab, { key: 'Mod-s', preventDefault: true, run: () => (void save(path), true) }]),
+        sendKeymap((from, to) => propsRef.current.onSend(path, from, to)),
         basicSetup,
         editorTheme,
         language.of([]),

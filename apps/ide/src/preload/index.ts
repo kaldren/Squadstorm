@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import type { SquadstormApi } from '@shared/api'
 
 function subscribe<T>(channel: string, listener: (id: string, payload: T) => void): () => void {
@@ -13,6 +13,7 @@ const api: SquadstormApi = {
     save: (state) => ipcRenderer.invoke('state:save', state)
   },
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
+  pathForFile: (file) => webUtils.getPathForFile(file),
   providers: () => ipcRenderer.invoke('providers:list'),
   github: {
     status: () => ipcRenderer.invoke('github:status'),
@@ -30,6 +31,8 @@ const api: SquadstormApi = {
     search: (root, query) => ipcRenderer.invoke('files:search', root, query),
     read: (root, path) => ipcRenderer.invoke('files:read', root, path),
     write: (root, path, content) => ipcRenderer.invoke('files:write', root, path, content),
+    writeIfUnchanged: (root, path, expected, content) =>
+      ipcRenderer.invoke('files:writeIfUnchanged', root, path, expected, content),
     watch: (root) => ipcRenderer.send('files:watch', root),
     unwatch: (root) => ipcRenderer.send('files:unwatch', root),
     onChanged: (listener) => subscribe<string[]>('files:changed', listener)
@@ -40,12 +43,22 @@ const api: SquadstormApi = {
     commitFiles: (root, hash) => ipcRenderer.invoke('git:commitFiles', root, hash),
     commitDiff: (root, hash, path, from) => ipcRenderer.invoke('git:commitDiff', root, hash, path, from),
     diff: (root, path, from) => ipcRenderer.invoke('git:diff', root, path, from),
-    commit: (root, message) => ipcRenderer.invoke('git:commit', root, message),
+    commit: (root, message, paths) => ipcRenderer.invoke('git:commit', root, message, paths),
+    numstat: (root) => ipcRenderer.invoke('git:numstat', root),
+    discard: (root, change) => ipcRenderer.invoke('git:discard', root, change),
     push: (root) => ipcRenderer.invoke('git:push', root)
+  },
+  worktrees: {
+    add: (root, label) => ipcRenderer.invoke('worktrees:add', root, label),
+    inspect: (root, worktree) => ipcRenderer.invoke('worktrees:inspect', root, worktree),
+    remove: (root, worktree, force) => ipcRenderer.invoke('worktrees:remove', root, worktree, force),
+    merge: (root, worktree) => ipcRenderer.invoke('worktrees:merge', root, worktree),
+    openPr: (root, worktree) => ipcRenderer.invoke('worktrees:openPr', root, worktree)
   },
   attention: {
     notify: (notice) => ipcRenderer.send('attention:notify', notice),
     badge: (count) => ipcRenderer.send('attention:badge', count),
+    working: (count) => ipcRenderer.send('attention:working', count),
     onClicked: (listener) => {
       const handler = (_e: IpcRendererEvent, agentId: string) => listener(agentId)
       ipcRenderer.on('attention:clicked', handler)
@@ -58,7 +71,8 @@ const api: SquadstormApi = {
     resize: (id, cols, rows) => ipcRenderer.send('pty:resize', id, cols, rows),
     kill: (id) => ipcRenderer.invoke('pty:kill', id),
     onData: (listener) => subscribe<string>('pty:data', listener),
-    onExit: (listener) => subscribe<number>('pty:exit', listener)
+    onExit: (listener) => subscribe<number>('pty:exit', listener),
+    onSession: (listener) => subscribe<string>('pty:session', listener)
   }
 }
 
