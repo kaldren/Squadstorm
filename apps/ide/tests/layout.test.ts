@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evenSplit, gridDimensions, gridRows, moveItem, nextAgentLabel, resizeSplit } from '../src/shared/layout'
+import { cleanName, displayName, evenSplit, gridDimensions, gridRows, moveItem, nextAgentLabel, resizeSplit } from '../src/shared/layout'
 import type { AgentConfig } from '../src/shared/types'
 
 describe('gridDimensions', () => {
@@ -31,6 +31,30 @@ describe('nextAgentLabel', () => {
 
   it('does not reuse a removed number', () => {
     expect(nextAgentLabel([agent('claude', 'Claude 3')], 'claude')).toBe('Claude 4')
+  })
+})
+
+describe('agent names', () => {
+  it('shows the given name, else the automatic label', () => {
+    expect(displayName({ label: 'Claude 1' })).toBe('Claude 1')
+    expect(displayName({ label: 'Claude 1', name: 'Google OAuth' })).toBe('Google OAuth')
+    // A blank saved name (hand-edited state) must not leave the tile without a name to double-click.
+    expect(displayName({ label: 'Claude 1', name: '' })).toBe('Claude 1')
+  })
+
+  it('tidies a typed name', () => {
+    expect(cleanName('  Google   OAuth ')).toBe('Google OAuth')
+    expect(cleanName('   ')).toBeUndefined()
+    expect(cleanName('')).toBeUndefined()
+    expect(cleanName('x'.repeat(50))).toBe('x'.repeat(40))
+  })
+
+  it('keeps numbering after a rename', () => {
+    const agents: AgentConfig[] = [
+      { id: '1', provider: 'claude', label: 'Claude 1' },
+      { id: '2', provider: 'claude', label: 'Claude 2', name: 'Google OAuth' }
+    ]
+    expect(nextAgentLabel(agents, 'claude')).toBe('Claude 3')
   })
 })
 

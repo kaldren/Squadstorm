@@ -12,7 +12,10 @@ export interface AgentWorktree {
 export interface AgentConfig {
   id: string
   provider: Provider
+  /** The automatic name ("Claude 1"); it keeps numbering and automatic branch names stable. */
   label: string
+  /** The name the user gave it; shown instead of `label`. */
+  name?: string
   /** Set when the agent works in its own worktree instead of the workspace folder. */
   worktree?: AgentWorktree
   /** It has run before, so the next launch resumes its conversation. */

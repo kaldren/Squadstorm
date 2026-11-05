@@ -32,6 +32,7 @@ Start any mix of **Claude**, **Codex** and plain **Terminal** tiles. The grid la
 
 - drag the dividers to resize rows and columns,
 - drag a tile by its header to reorder it (its session keeps running),
+- double-click a tile's name to rename it ("Claude 1" → "Google OAuth"); the name is kept when you reopen the app, and clearing it brings back the automatic one,
 - maximize one agent to full screen and restore the grid later,
 - add or remove agents on the fly with **+ Claude**, **+ Codex** and **+ Terminal**.
 

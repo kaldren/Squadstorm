@@ -1,4 +1,5 @@
 import { useMemo, useState, type KeyboardEvent } from 'react'
+import { displayName } from '@shared/layout'
 import { bracketedPaste, formatReference } from '@shared/links'
 import { PROVIDERS } from '@shared/providers'
 import { useAttention } from '../stores/attention'
@@ -83,7 +84,7 @@ export function SendToAgent({ request, onClose }: { request: SendRequest; onClos
                 onDoubleClick={() => send(false)}
               >
                 <span className="h-2 w-2 rounded-full" style={{ background: PROVIDERS[t.provider].color }} />
-                {t.label}
+                {displayName(t)}
                 {t.worktree && <span className="truncate font-mono text-[11px] text-muted">{t.worktree.branch}</span>}
               </div>
             ))

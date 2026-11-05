@@ -406,3 +406,37 @@ test('repos without commits offer no worktrees', async () => {
 
   await s.app.close()
 })
+
+test('a renamed agent keeps its branch', async () => {
+  const project = repo()
+  const s = await launch(project)
+  await start(s)
+  const tile = s.page.getByTestId('agent-tile')
+  const branch = tile.getByTestId('agent-branch')
+  await expect(branch).toHaveText(/^squadstorm\/claude-1-[0-9a-f]{4}$/)
+  const before = await branch.innerText()
+  const cwd = await cwdOf(s.app, tile)
+
+  await tile.getByTestId('agent-name').dblclick()
+  await tile.getByTestId('agent-name-input').fill('Google OAuth')
+  await tile.getByTestId('agent-name-input').press('Enter')
+  await expect(tile.getByTestId('agent-name')).toHaveText('Google OAuth')
+
+  // Branch and folder stay; the Code view's scope picker lists it under its new name.
+  await expect(branch).toHaveText(before)
+  expect(git(cwd, 'branch', '--show-current').trim()).toBe(before)
+  await s.page.getByRole('tab', { name: 'Code' }).click()
+  await expect(s.page.getByTestId('code-scope').locator('option', { hasText: `Google OAuth · ${before}` })).toHaveCount(1)
+
+  // Removing it with uncommitted work asks about it by its new name.
+  await s.page.getByRole('tab', { name: 'Agents' }).click()
+  await run(s.page, tile, 'echo wip > wip.txt')
+  await expect.poll(() => existsSync(join(cwd, 'wip.txt'))).toBe(true)
+  s.answers.push(false)
+  await s.page.getByRole('button', { name: 'Remove Google OAuth' }).click()
+  await expect.poll(() => s.dialogs.length).toBe(1)
+  expect(s.dialogs[0]).toContain('Discard uncommitted changes in the worktree of Google OAuth (1 change)')
+  await expect(tile).toHaveCount(1)
+
+  await s.app.close()
+})

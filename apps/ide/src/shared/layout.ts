@@ -38,6 +38,19 @@ export function resizeSplit(sizes: readonly number[], boundary: number, delta: n
   return next
 }
 
+/** Longest name a tile can be given. */
+export const MAX_NAME = 40
+
+/** What a tile is called: the name the user gave it, else its automatic label. */
+export function displayName(agent: Pick<AgentConfig, 'label' | 'name'>): string {
+  return agent.name || agent.label
+}
+
+/** A typed name, trimmed with its spaces collapsed and cut to `MAX_NAME`; `undefined` when blank. */
+export function cleanName(text: string): string | undefined {
+  return text.trim().replace(/\s+/g, ' ').slice(0, MAX_NAME).trim() || undefined
+}
+
 /** "Claude 3" when Claude 1 and Claude 2 already exist (gaps are not reused). */
 export function nextAgentLabel(agents: AgentConfig[], provider: Provider): string {
   const prefix = PROVIDERS[provider].label

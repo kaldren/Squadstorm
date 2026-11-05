@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { ProviderAvailability } from '@shared/api'
-import { moveItem, nextAgentLabel } from '@shared/layout'
+import { cleanName, displayName, moveItem, nextAgentLabel } from '@shared/layout'
 import { newlySharedAgents } from '@shared/sessions'
 import { PROVIDERS, PROVIDER_IDS, type Provider } from '@shared/providers'
 import type { AgentConfig, AppState, Workspace } from '@shared/types'
@@ -63,6 +63,8 @@ interface WorkspacesStore extends AppState {
   /** `name` is the branch name typed for an isolated agent; without one it's named automatically. */
   addAgent(workspaceId: string, provider: Provider, name?: string): void
   removeAgent(workspaceId: string, agentId: string): Promise<void>
+  /** Gives a tile a name; an empty name goes back to the automatic one. */
+  renameAgent(workspaceId: string, agentId: string, text: string): void
   /** Remembers that an agent has run, so the next launch resumes its conversation. */
   markStarted(workspaceId: string, agentId: string): void
   /** Remembers the session an agent resumes from now on. */
@@ -106,7 +108,7 @@ async function releaseWorktrees(root: string, agents: AgentConfig[]): Promise<Se
   )
   const dirty = isolated.filter((_, i) => changes[i] > 0)
   if (dirty.length > 0) {
-    const what = dirty.map((a) => `${a.label} (${plural(changes[isolated.indexOf(a)], 'change')})`).join(', ')
+    const what = dirty.map((a) => `${displayName(a)} (${plural(changes[isolated.indexOf(a)], 'change')})`).join(', ')
     if (!confirm(`Discard uncommitted changes in the worktree of ${what}? This can't be undone.`)) return new Set()
   }
   const kept: string[] = []
@@ -120,7 +122,7 @@ async function releaseWorktrees(root: string, agents: AgentConfig[]): Promise<Se
       released.add(agent.id)
     } catch (e) {
       const dropAnyway = confirm(
-        `Could not remove the worktree of ${agent.label}: ${ipcMessage(e)}\n\n` +
+        `Could not remove the worktree of ${displayName(agent)}: ${ipcMessage(e)}\n\n` +
           `Remove it from Squadstorm anyway? Its folder (${wt.path}) and branch ${wt.branch} stay on disk.`
       )
       if (dropAnyway) released.add(agent.id)
@@ -166,7 +168,7 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
           }))
         } catch (e) {
           updateWorkspace(workspaceId, (w) => ({ ...w, agents: w.agents.filter((a) => a.id !== agentId) }))
-          alert(`Could not create a worktree for ${agent.label}: ${ipcMessage(e)}`)
+          alert(`Could not create a worktree for ${displayName(agent)}: ${ipcMessage(e)}`)
         }
       })
       // One failure must never stall the agents queued after it.
@@ -269,6 +271,20 @@ export const useWorkspaces = create<WorkspacesStore>((set, get) => {
       updateWorkspace(workspaceId, (w) => ({
         ...w,
         agents: w.agents.filter((a) => a.id !== agentId)
+      }))
+    },
+
+    renameAgent(workspaceId, agentId, text) {
+      const name = cleanName(text)
+      const agent = get().workspaces.find((w) => w.id === workspaceId)?.agents.find((a) => a.id === agentId)
+      if (!agent || agent.name === name) return
+      updateWorkspace(workspaceId, (w) => ({
+        ...w,
+        agents: w.agents.map((a) => {
+          if (a.id !== agentId) return a
+          const { name: _old, ...rest } = a
+          return name ? { ...rest, name } : rest
+        })
       }))
     },
 
