@@ -1,6 +1,6 @@
 # Intent: Rename agents and terminals
 
-Author: Kaloyan (owner). Status: draft.
+Author: Kaloyan (owner). Status: Accepted.
 Origin: idea (2026-11-05). Issue: none.
 
 ## Problem
@@ -34,8 +34,8 @@ Anyone running more than one agent or terminal in Squadstorm IDE. Tile header, s
 - e2e tests cover renaming and the name surviving a restart.
 
 ## Open questions
-- How do I start a rename: double-click the name in the tile header, a menu item, or both?
-- What happens if I clear the name: go back to the automatic name, or refuse the empty name?
+- How do I start a rename: double-click the name in the tile header, a menu item, or both? - Double click the name.
+- What happens if I clear the name: go back to the automatic name, or refuse the empty name? - Keep the old one.
 - Can two tiles have the same name, or should that be refused?
 - Is there a maximum length, or does a long name just get cut off with "…" in the header?
 - If I rename "Claude 2" to something else, should the next new Claude still be "Claude 3", or can "Claude 2" be reused?
