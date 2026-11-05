@@ -38,6 +38,8 @@ describe('agent names', () => {
   it('shows the given name, else the automatic label', () => {
     expect(displayName({ label: 'Claude 1' })).toBe('Claude 1')
     expect(displayName({ label: 'Claude 1', name: 'Google OAuth' })).toBe('Google OAuth')
+    // A blank saved name (hand-edited state) must not leave the tile without a name to double-click.
+    expect(displayName({ label: 'Claude 1', name: '' })).toBe('Claude 1')
   })
 
   it('tidies a typed name', () => {

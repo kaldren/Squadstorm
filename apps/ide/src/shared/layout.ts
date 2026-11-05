@@ -43,7 +43,7 @@ export const MAX_NAME = 40
 
 /** What a tile is called: the name the user gave it, else its automatic label. */
 export function displayName(agent: Pick<AgentConfig, 'label' | 'name'>): string {
-  return agent.name ?? agent.label
+  return agent.name || agent.label
 }
 
 /** A typed name, trimmed with its spaces collapsed and cut to `MAX_NAME`; `undefined` when blank. */

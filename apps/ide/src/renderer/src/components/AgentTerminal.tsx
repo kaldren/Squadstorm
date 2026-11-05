@@ -482,6 +482,8 @@ function AgentName({
       spellCheck={false}
       onKeyDown={(e) => {
         e.stopPropagation()
+        // Enter that confirms an input-method candidate (Japanese, Chinese…) isn't the end of the name.
+        if (e.nativeEvent.isComposing) return
         if (e.key === 'Enter') finish(e.currentTarget.value)
         else if (e.key === 'Escape') finish(null)
       }}

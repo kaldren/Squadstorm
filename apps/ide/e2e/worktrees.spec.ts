@@ -428,5 +428,15 @@ test('a renamed agent keeps its branch', async () => {
   await s.page.getByRole('tab', { name: 'Code' }).click()
   await expect(s.page.getByTestId('code-scope').locator('option', { hasText: `Google OAuth · ${before}` })).toHaveCount(1)
 
+  // Removing it with uncommitted work asks about it by its new name.
+  await s.page.getByRole('tab', { name: 'Agents' }).click()
+  await run(s.page, tile, 'echo wip > wip.txt')
+  await expect.poll(() => existsSync(join(cwd, 'wip.txt'))).toBe(true)
+  s.answers.push(false)
+  await s.page.getByRole('button', { name: 'Remove Google OAuth' }).click()
+  await expect.poll(() => s.dialogs.length).toBe(1)
+  expect(s.dialogs[0]).toContain('Discard uncommitted changes in the worktree of Google OAuth (1 change)')
+  await expect(tile).toHaveCount(1)
+
   await s.app.close()
 })

@@ -71,3 +71,8 @@ Step 3: the header is draggable, has its own double-click, and sits inside a til
 - All → `pnpm typecheck && pnpm test && pnpm test:e2e` output pasted in the PR, plus a screenshot of a tile mid-rename
 
 ## Deviations
+- 2026-11-06 — `AgentName`'s editing state lives in `AgentTerminal` (it also drives the header's `draggable`), so its props are `name`, `editing`, `onEdit()` and `onDone(text | null)` instead of `name`, `onRename(text)` and `onEditingChange(editing)`. Same behaviour.
+- 2026-11-06 — From review (nits):
+  - `displayName` uses `||` instead of `??`, so a blank saved name (only possible by hand-editing state) still shows the automatic label and stays double-clickable; covered in `tests/layout.test.ts › agent names`.
+  - Enter while an input method is composing (Japanese, Chinese…) no longer saves the name mid-word.
+  - `worktrees.spec.ts › a renamed agent keeps its branch` also checks that removing it with uncommitted work asks by its new name.
