@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { ActivityTracker, type Activity } from '@shared/activity'
 import { nextWaiting } from '@shared/attention'
+import { displayName, MAX_NAME } from '@shared/layout'
 import { bracketedPaste, cellRange, findPathLinks, findUrlLinks, logicalLine, quotePath } from '@shared/links'
 import { PROVIDERS } from '@shared/providers'
 import type { AgentConfig } from '@shared/types'
@@ -78,10 +79,12 @@ export function AgentTerminal({
   const [activity, setActivity] = useState<Activity>('online')
   const [waiting, setWaiting] = useState(false)
   const [focused, setFocused] = useState(false)
+  const [editingName, setEditingName] = useState(false)
   const provider = PROVIDERS[agent.provider]
+  const name = displayName(agent)
   // Notification text uses the latest names without restarting the terminal.
-  const namesRef = useRef({ label: agent.label, workspaceName })
-  namesRef.current = { label: agent.label, workspaceName }
+  const namesRef = useRef({ label: name, workspaceName })
+  namesRef.current = { label: name, workspaceName }
   // Read when (re)starting, without restarting the terminal when they change.
   const launchRef = useRef({ started: !!agent.started, soleInFolder, sessionId: agent.sessionId ?? agent.id })
   launchRef.current = { started: !!agent.started, soleInFolder, sessionId: agent.sessionId ?? agent.id }
@@ -347,11 +350,11 @@ export function AgentTerminal({
         }`}
         data-testid="agent-drag-handle"
         title={reorder ? 'Drag to reorder' : undefined}
-        draggable={reorder !== null}
+        draggable={reorder !== null && !editingName}
         onDragStart={(e) => {
           if (!reorder) return
           e.dataTransfer.effectAllowed = 'move'
-          e.dataTransfer.setData('text/plain', agent.label)
+          e.dataTransfer.setData('text/plain', name)
           reorder.onDragStart()
         }}
         onDragEnd={() => reorder?.onDragEnd()}
@@ -362,7 +365,16 @@ export function AgentTerminal({
         }}
       >
         <span className="h-2 w-2 rounded-full" style={{ background: provider.color }} />
-        <span className="font-medium">{agent.label}</span>
+        <AgentName
+          name={name}
+          editing={editingName}
+          onEdit={() => setEditingName(true)}
+          onDone={(text) => {
+            setEditingName(false)
+            if (text !== null) useWorkspaces.getState().renameAgent(workspaceId, agent.id, text)
+            termRef.current?.focus()
+          }}
+        />
         {agent.worktree && (
           <span className="truncate font-mono text-[11px] text-muted" title={agent.worktree.path} data-testid="agent-branch">
             {agent.worktree.branch}
@@ -377,7 +389,7 @@ export function AgentTerminal({
         )}
         <div className="ml-auto flex items-center gap-1">
           {agent.worktree && (
-            <WorktreeMenu workspaceId={workspaceId} workspacePath={workspacePath} worktree={agent.worktree} label={agent.label} />
+            <WorktreeMenu workspaceId={workspaceId} workspacePath={workspacePath} worktree={agent.worktree} label={name} />
           )}
           {(status === 'exited' || status === 'error') && (
             <button
@@ -387,15 +399,15 @@ export function AgentTerminal({
               Restart
             </button>
           )}
-          <WindowButton label={`Restore ${agent.label}`} title="Back to grid" disabled={!maximized} onClick={onRestore}>
+          <WindowButton label={`Restore ${name}`} title="Back to grid" disabled={!maximized} onClick={onRestore}>
             <path d="M4.5 1.5h6v6M1.5 4.5h6v6h-6z" />
           </WindowButton>
-          <WindowButton label={`Maximize ${agent.label}`} title="Full screen" disabled={maximized} onClick={onMaximize}>
+          <WindowButton label={`Maximize ${name}`} title="Full screen" disabled={maximized} onClick={onMaximize}>
             <path d="M1.5 1.5h9v9h-9z" />
           </WindowButton>
           <WindowButton
-            label={`Remove ${agent.label}`}
-            title={`Stop and remove ${agent.label}`}
+            label={`Remove ${name}`}
+            title={`Stop and remove ${name}`}
             danger
             onClick={onClose}
           >
@@ -408,6 +420,80 @@ export function AgentTerminal({
         <div ref={hostRef} className="h-full w-full" data-testid="agent-terminal" />
       </div>
     </div>
+  )
+}
+
+/**
+ * The tile's name in its header. Double-clicking it (and only it: the rest of the header maximizes)
+ * turns it into a field; Enter or clicking away saves, Escape cancels. `onDone` gets the typed text,
+ * or null when cancelled.
+ */
+function AgentName({
+  name,
+  editing,
+  onEdit,
+  onDone
+}: {
+  name: string
+  editing: boolean
+  onEdit(): void
+  onDone(text: string | null): void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  // Enter (or Escape) unmounts the field, which blurs it: finish only once.
+  const doneRef = useRef(false)
+
+  useEffect(() => {
+    if (!editing) return
+    doneRef.current = false
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [editing])
+
+  const finish = (text: string | null) => {
+    if (doneRef.current) return
+    doneRef.current = true
+    onDone(text)
+  }
+
+  if (!editing) {
+    return (
+      <span
+        className="min-w-0 truncate font-medium"
+        data-testid="agent-name"
+        title={`${name} · double-click to rename`}
+        onDoubleClick={(e) => {
+          e.stopPropagation()
+          onEdit()
+        }}
+      >
+        {name}
+      </span>
+    )
+  }
+  return (
+    <input
+      ref={inputRef}
+      data-testid="agent-name-input"
+      aria-label="Tile name"
+      className="h-5 w-48 min-w-0 rounded border border-accent/60 bg-bg px-1 text-xs font-medium text-fg outline-none"
+      defaultValue={name}
+      maxLength={MAX_NAME}
+      spellCheck={false}
+      onKeyDown={(e) => {
+        e.stopPropagation()
+        if (e.key === 'Enter') finish(e.currentTarget.value)
+        else if (e.key === 'Escape') finish(null)
+      }}
+      onBlur={(e) => finish(e.currentTarget.value)}
+      // The tile refocuses its terminal on mousedown, and the header maximizes on double-click.
+      onMouseDown={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+    />
   )
 }
 

@@ -1,5 +1,5 @@
 import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
-import { evenSplit, gridRows, resizeSplit } from '@shared/layout'
+import { displayName, evenSplit, gridRows, resizeSplit } from '@shared/layout'
 import { soleInFolder } from '@shared/sessions'
 import type { Workspace } from '@shared/types'
 import { useAttention } from '../stores/attention'
@@ -116,7 +116,7 @@ export function AgentGrid({ workspace, hidden }: { workspace: Workspace; hidden:
                     className="flex flex-1 items-center justify-center rounded-lg border border-line bg-bg text-xs text-muted"
                     data-testid="agent-pending"
                   >
-                    Creating a worktree for {agent.label}…
+                    Creating a worktree for {displayName(agent)}…
                   </div>
                 ) : (
                   <AgentTerminal

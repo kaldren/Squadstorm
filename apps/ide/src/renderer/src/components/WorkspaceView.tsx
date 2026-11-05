@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { nextAgentLabel } from '@shared/layout'
+import { displayName, nextAgentLabel } from '@shared/layout'
 import { PROVIDERS, PROVIDER_IDS } from '@shared/providers'
 import type { Provider } from '@shared/providers'
 import type { Workspace } from '@shared/types'
@@ -74,7 +74,7 @@ export function WorkspaceView({ workspace, hidden }: { workspace: Workspace; hid
   // The Code view shows the workspace or one isolated agent's worktree.
   const scopes = [
     { root: workspace.path, label: 'Workspace' },
-    ...workspace.agents.flatMap((a) => (a.worktree ? [{ root: a.worktree.path, label: `${a.label} · ${a.worktree.branch}` }] : []))
+    ...workspace.agents.flatMap((a) => (a.worktree ? [{ root: a.worktree.path, label: `${displayName(a)} · ${a.worktree.branch}` }] : []))
   ]
   const requested = useWorkspaces((s) => s.codeScope[workspace.id])
   const scope = scopes.some((s) => s.root === requested) ? requested! : workspace.path

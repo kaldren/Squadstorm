@@ -91,6 +91,27 @@ test('notifies when a background agent finishes', async () => {
   await app.close()
 })
 
+test('a renamed agent is notified by its name', async () => {
+  const folder = project()
+  const { app, page } = await launch([folder])
+  await page.getByTestId('pick-folder').click()
+  await page.getByTestId('start').click()
+
+  // Renamed while the stand-in agent is still in its first second, before it works and goes quiet.
+  const tile = page.getByTestId('agent-tile')
+  await tile.getByTestId('agent-name').dblclick()
+  await tile.getByTestId('agent-name-input').fill('Google OAuth')
+  await tile.getByTestId('agent-name-input').press('Enter')
+  await expect(tile.getByTestId('agent-name')).toHaveText('Google OAuth')
+  // Saving the name gives the terminal focus; the window still counts as in the background.
+
+  await expect.poll(() => notices(app), { timeout: 20_000 }).toHaveLength(1)
+  const [notice] = await notices(app)
+  expect(notice.title).toBe(`Google OAuth in ${basename(folder)}`)
+
+  await app.close()
+})
+
 test('sidebar counts working and waiting agents; a notification switches workspace', async () => {
   const first = project()
   const second = project()
