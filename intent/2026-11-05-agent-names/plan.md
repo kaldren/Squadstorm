@@ -1,6 +1,6 @@
 # Plan: Rename agents and terminals
 
-From: intent.md + spec.md in intent/2026-11-05-agent-names/. Status: draft.
+From: intent.md + spec.md in intent/2026-11-05-agent-names/. Status: Accepted.
 Written without changing any code.
 
 ## Files that change
