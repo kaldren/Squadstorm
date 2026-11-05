@@ -1,6 +1,6 @@
 # Spec: Rename agents and terminals
 
-From: intent/2026-11-05-agent-names/intent.md. Status: draft.
+From: intent/2026-11-05-agent-names/intent.md. Status: Accepted.
 Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill.
 
 ## Requirements
@@ -54,16 +54,16 @@ Keeping `label` rather than overwriting it gives R5 for free (clearing the name 
 **Every display of the name uses `displayName`** (R3): the tile header and its Restore/Maximize/Remove labels, `namesRef` (notifications), `WorktreeMenu`'s `label` prop, `workspaces.ts` worktree remove/create prompts and errors, `WorkspaceView`'s scope picker, `SendToAgent`, `AgentGrid`'s "Creating a worktree for …", and the drag payload. Places that need the automatic label keep `label`: `nextAgentLabel` and `worktrees.add(path, agent.label, name)`.
 
 ## Flagged concerns
-- [ ] **Double-click on the header already maximizes the tile.** Constraint: intent "how do I start a rename" (open question 1) vs. existing behavior. Proposed: double-clicking the *name* renames; double-clicking anywhere else on the header still maximizes. Alternative: rename from a small pencil button that appears on hover, which leaves double-click alone but adds a control to every header. Or both.
-- [ ] **Save on blur, not only Enter.** Proposed: clicking away keeps what I typed (like Finder and VS Code tabs); only Escape throws it away. Alternative: blur cancels, so only Enter saves.
-- [ ] **Renaming doesn't rename the worktree branch.** An agent renamed `Google OAuth` stays on `squadstorm/claude-1-9f3a`. That's what the intent asks (out of scope), but the tile then shows both the new name and the old branch. Proposed: accept; name the branch when adding the agent (the worktree-names feature) if it should match.
+- [x] **Double-click on the header already maximizes the tile.** Constraint: intent "how do I start a rename" (open question 1) vs. existing behavior. Proposed: double-clicking the *name* renames; double-clicking anywhere else on the header still maximizes. Alternative: rename from a small pencil button that appears on hover, which leaves double-click alone but adds a control to every header. Or both. **Resolved 2026-11-06: double-click the name (spec accepted).**
+- [x] **Save on blur, not only Enter.** Proposed: clicking away keeps what I typed (like Finder and VS Code tabs); only Escape throws it away. Alternative: blur cancels, so only Enter saves. **Resolved 2026-11-06: as proposed (spec accepted).**
+- [x] **Renaming doesn't rename the worktree branch.** An agent renamed `Google OAuth` stays on `squadstorm/claude-1-9f3a`. That's what the intent asks (out of scope), but the tile then shows both the new name and the old branch. Proposed: accept; name the branch when adding the agent (the worktree-names feature) if it should match. **Resolved 2026-11-06: as proposed (spec accepted).**
 
 ## Risk
 Low. One optional field in saved state, added and read; old state has no `name` and loads as today. The main risk is a place that shows the name but keeps reading `label`, which AC3 covers for each place listed, plus a grep for `.label` on agents in the plan. A second risk is the header's existing drag and double-click handlers swallowing or conflicting with the input; AC1 and AC2 exercise it.
 
 ## Open questions
 From intent.md:
-- How to start a rename? **Proposed:** double-click the name. See concern 1.
+- How to start a rename? **Proposed:** double-click the name. See concern 1. **Resolved 2026-11-06:** double-click the name.
 - Clearing the name? **Answered:** returns to the automatic name (R5).
 - Duplicate names? **Answered:** allowed (R5).
 - Maximum length? **Answered:** 40 characters; long names truncate with "…" in the header (R5).
