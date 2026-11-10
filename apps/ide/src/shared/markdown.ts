@@ -40,9 +40,12 @@ const repoPath = (fromPath: string, ref: string) => {
 /** Where a link in the markdown file at `fromPath` leads; null for anything the preview won't follow. */
 export function resolveLink(fromPath: string, href: string): LinkTarget | null {
   const ref = href.trim()
-  if (/^https?:\/\//i.test(ref)) return { kind: 'external', url: ref }
+  // The scheme in lower case: the main process only opens `http(s)://` as written.
+  if (/^https?:\/\//i.test(ref)) return { kind: 'external', url: ref.replace(/^https?/i, (s) => s.toLowerCase()) }
   if (ref.startsWith('#')) return ref.length > 1 ? { kind: 'anchor', id: decode(ref.slice(1)) } : null
-  if (SCHEME.test(ref)) return null
+  if (SCHEME.test(ref) || ref.startsWith('//')) return null
+  // A folder (`examples/`) has nothing to open as a tab.
+  if (ref.split(/[?#]/)[0].endsWith('/')) return null
   const path = repoPath(fromPath, ref)
   return path === null ? null : { kind: 'file', path }
 }
@@ -50,7 +53,7 @@ export function resolveLink(fromPath: string, href: string): LinkTarget | null {
 /** Where an image in the markdown file at `fromPath` comes from; null for anything the preview won't load. */
 export function resolveImage(fromPath: string, src: string): ImageTarget | null {
   const ref = src.trim()
-  if (/^https:\/\//i.test(ref)) return { kind: 'web', url: ref }
+  if (/^https:\/\//i.test(ref)) return { kind: 'web', url: ref.replace(/^https/i, 'https') }
   if (SCHEME.test(ref) || ref.startsWith('//')) return null
   const path = repoPath(fromPath, ref)
   return path === null ? null : { kind: 'repo', path }

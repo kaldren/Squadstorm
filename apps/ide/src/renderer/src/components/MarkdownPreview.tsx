@@ -1,6 +1,13 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { isMarkdown, resolveLink } from '@shared/markdown'
-import { addAnchors, drawMermaid, highlightBlocks, loadImages, renderMarkdown } from '../markdown/render'
+import {
+  addAnchors,
+  drawMermaid,
+  highlightBlocks,
+  loadImages,
+  newPreviewCache,
+  renderMarkdown
+} from '../markdown/render'
 
 interface Props {
   root: string
@@ -17,17 +24,33 @@ export function MarkdownPreview({ root, path, source, onOpenFile }: Props) {
   const body = useRef<HTMLDivElement>(null)
   /** Bumped by every render, so async passes started for an older one stop. */
   const run = useRef(0)
+  // Images and diagrams already shown, so a re-render (an agent saving the file) doesn't reload them.
+  const cache = useRef(newPreviewCache())
 
   useLayoutEffect(() => {
+    const scroller = ref.current!
     const container = body.current!
     const mine = ++run.current
     const current = () => run.current === mine
+    const scrollTop = scroller.scrollTop
     container.innerHTML = renderMarkdown(source)
     addAnchors(container)
+    // Each pass applies what it has cached before its first await, so before the next paint.
     void highlightBlocks(container, current)
-    void drawMermaid(container, current)
-    void loadImages(container, root, path, current)
+    void drawMermaid(container, cache.current, current)
+    void loadImages(container, root, path, cache.current, current)
+    scroller.scrollTop = scrollTop
   }, [root, path, source])
+
+  // An image changed on disk is read again on the next render.
+  useEffect(
+    () =>
+      window.api.files.onChanged((changedRoot, paths) => {
+        if (changedRoot !== root) return
+        for (const changed of paths) cache.current.images.delete(changed)
+      }),
+    [root]
+  )
 
   // Keys go here, never to the hidden editor underneath.
   useEffect(() => {

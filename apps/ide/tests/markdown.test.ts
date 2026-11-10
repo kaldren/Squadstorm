@@ -33,6 +33,7 @@ describe('resolveLink', () => {
   it('sends web links to the browser', () => {
     expect(resolveLink(from, 'https://x.y/')).toEqual({ kind: 'external', url: 'https://x.y/' })
     expect(resolveLink(from, 'http://x.y/a')).toEqual({ kind: 'external', url: 'http://x.y/a' })
+    expect(resolveLink(from, 'HTTPS://x.y/A')).toEqual({ kind: 'external', url: 'https://x.y/A' })
   })
 
   it('opens relative links as repo files, dropping the fragment', () => {
@@ -45,7 +46,7 @@ describe('resolveLink', () => {
     expect(resolveLink(from, '#setup')).toEqual({ kind: 'anchor', id: 'setup' })
   })
 
-  it.each(['../../etc/passwd', 'javascript:alert(1)', 'file:///etc/passwd', 'mailto:a@b.c', '#', ''])(
+  it.each(['../../etc/passwd', 'javascript:alert(1)', 'file:///etc/passwd', 'mailto:a@b.c', '#', '', '//host/x', 'examples/', 'examples/#top'])(
     'follows nothing for %s',
     (href) => {
       expect(resolveLink(from, href)).toBeNull()

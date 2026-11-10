@@ -9,7 +9,7 @@ const LOGO = 'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEUlEQVR4nGOomfMfjh
 const GUIDE = [
   '# Guide',
   '',
-  'Read the [site](https://example.com/x), the [notes](notes.md) or the [setup](#setup).',
+  'Read the [site](https://example.com/x), the [notes](notes.md), the [setup](#setup) or [later](#later).',
   '',
   '| Name | Value |',
   '| --- | --- |',
@@ -32,6 +32,9 @@ const GUIDE = [
   '',
   // Enough text that the Setup heading starts out of view.
   ...Array.from({ length: 60 }, (_, i) => `Filler paragraph ${i + 1}.\n`),
+  '<a name="later">Later on</a>, an old-style anchor.',
+  '',
+  ...Array.from({ length: 30 }, (_, i) => `More filler ${i + 1}.\n`),
   '## Setup',
   '',
   'The end.',
@@ -49,6 +52,20 @@ const EVIL = [
   ''
 ].join('\n')
 
+// A diagram far taller than its source, then an image, then enough text to scroll.
+const TALL = [
+  '# Tall',
+  '',
+  '```mermaid',
+  'graph TD',
+  '  A-->B-->C-->D-->E-->F-->G-->H',
+  '```',
+  '',
+  '![logo](img/logo.png)',
+  '',
+  ...Array.from({ length: 20 }, (_, i) => `Line ${i + 1}.\n`)
+].join('\n')
+
 /** A project with the markdown fixtures, opened in a fresh app on the Code view. */
 async function launch(): Promise<{ app: ElectronApplication; page: Page; project: string }> {
   const userData = mkdtempSync(join(tmpdir(), 'squadstorm-e2e-data-'))
@@ -57,6 +74,8 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page; project
   writeFileSync(join(project, 'docs', 'guide.md'), GUIDE)
   writeFileSync(join(project, 'docs', 'notes.md'), '# Notes\n\nSome notes.\n')
   writeFileSync(join(project, 'docs', 'evil.md'), EVIL)
+  writeFileSync(join(project, 'docs', 'tall.md'), TALL)
+  writeFileSync(join(project, 'docs', 'broken.md'), '# Broken\n\n```mermaid\ngraph TD\n  A-->\n```\n')
   writeFileSync(join(project, 'docs', 'img', 'logo.png'), Buffer.from(LOGO, 'base64'))
   writeFileSync(join(project, 'a.ts'), 'export const a = 1\n')
 
@@ -254,6 +273,78 @@ test('a conflict while previewing: compare, then reload into the preview', async
   await app.close()
 })
 
+test('an agent saving the file keeps the preview where it was', async () => {
+  const { app, page, project } = await launch()
+  const preview = page.getByTestId('markdown-preview')
+
+  await openFile(page, 'tall.md')
+  await page.getByTestId('markdown-preview-toggle').click()
+  await expect(preview.locator('.mermaid svg')).toBeVisible({ timeout: 15_000 })
+  await expect.poll(() => preview.locator('img[alt="logo"]').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(4)
+
+  // Scrolled to the bottom: had the diagram fallen back to its source while re-rendering, the page
+  // would get far shorter and the scroll position would be clamped.
+  const before = await preview.evaluate((el) => {
+    el.scrollTop = el.scrollHeight
+    return el.scrollTop
+  })
+  expect(before).toBeGreaterThan(200)
+
+  // Every painted frame from here on: was the diagram showing its source, or the image unloaded?
+  await preview.evaluate((el) => {
+    const w = window as any
+    w.__flashes = []
+    const check = () => {
+      if (el.querySelector('pre code.language-mermaid')) w.__flashes.push('diagram source')
+      if (el.querySelector('img:not([src])')) w.__flashes.push('unloaded image')
+      w.__frame = requestAnimationFrame(check)
+    }
+    w.__frame = requestAnimationFrame(check)
+  })
+  writeFileSync(join(project, 'docs', 'tall.md'), TALL + '\nAppended by an agent.\n')
+  await expect(preview).toContainText('Appended by an agent.')
+  await page.waitForTimeout(300)
+  const flashes = await page.evaluate(() => {
+    cancelAnimationFrame((window as any).__frame)
+    return [...new Set((window as any).__flashes as string[])]
+  })
+  expect(flashes).toEqual([])
+  expect(await preview.evaluate((el) => el.scrollTop)).toBeGreaterThanOrEqual(before)
+  await app.close()
+})
+
+test('a search match in a previewed file shows its source', async () => {
+  const { app, page } = await launch()
+  const preview = page.getByTestId('markdown-preview')
+  const toggle = page.getByTestId('markdown-preview-toggle')
+
+  await openFile(page, 'guide.md')
+  await toggle.click()
+  await expect(preview.locator('h1')).toHaveText('Guide')
+
+  await page.keyboard.press('Meta+Shift+f')
+  await page.keyboard.type('More filler 7.')
+  await page.getByTestId('search-match').first().click()
+  await expect(preview).toHaveCount(0)
+  await expect(page.getByTestId('code-editor')).toBeVisible()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.cm-selectionMatch, .cm-content')).toContainText('More filler 7.')
+  await app.close()
+})
+
+test('a broken mermaid diagram shows its source and the error', async () => {
+  const { app, page } = await launch()
+  const preview = page.getByTestId('markdown-preview')
+
+  await openFile(page, 'broken.md')
+  await page.getByTestId('markdown-preview-toggle').click()
+  await expect(preview.locator('.mermaid-error')).toContainText('Mermaid:', { timeout: 15_000 })
+  await expect(preview.locator('pre code.language-mermaid')).toContainText('A-->')
+  // Nothing left behind outside the preview.
+  await expect(page.locator('body > [id*="squadstorm-mermaid"]')).toHaveCount(0)
+  await app.close()
+})
+
 test('links in the preview', async () => {
   const { app, page } = await launch()
   const preview = page.getByTestId('markdown-preview')
@@ -261,9 +352,17 @@ test('links in the preview', async () => {
   await openFile(page, 'guide.md')
   await page.getByTestId('markdown-preview-toggle').click()
 
+  // An old-style <a name> target works too.
+  const later = preview.locator('[data-anchor="later"]')
+  await expect(later).toHaveText('Later on')
+  await expect(later).not.toBeInViewport()
+  await preview.getByRole('link', { name: 'later', exact: true }).click()
+  await expect(later).toBeInViewport()
+
   // #setup scrolls to the heading.
   const setup = preview.locator('[data-anchor="setup"]')
   await expect(setup).toHaveText('Setup')
+  await preview.evaluate((el) => (el.scrollTop = 0))
   await expect(setup).not.toBeInViewport()
   await preview.getByRole('link', { name: 'setup', exact: true }).click()
   await expect(setup).toBeInViewport()

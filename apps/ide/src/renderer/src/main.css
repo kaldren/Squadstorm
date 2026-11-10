@@ -193,6 +193,10 @@ body {
   display: inline;
   max-width: 100%;
 }
+/* Sized by the preview from the last load (not by the file): keep the aspect ratio when scaled down. */
+.markdown-preview img.sized {
+  height: auto;
+}
 .markdown-preview .mermaid {
   display: flex;
   justify-content: center;

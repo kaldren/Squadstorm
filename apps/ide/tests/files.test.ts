@@ -1,4 +1,4 @@
-import { mkdtempSync, truncateSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -88,6 +88,13 @@ describe('readImage', () => {
   // Sparse, so it takes no real space.
   writeFileSync(join(root, 'huge.png'), '')
   truncateSync(join(root, 'huge.png'), 11 * 1024 * 1024)
+  // What a cloned repo could hold: links out of it, to a device, and a folder named like an image.
+  const outside = mkdtempSync(join(tmpdir(), 'squadstorm-outside-'))
+  writeFileSync(join(outside, 'secret.png'), png)
+  symlinkSync(join(outside, 'secret.png'), join(root, 'escape.png'))
+  symlinkSync('/dev/zero', join(root, 'zero.png'))
+  mkdirSync(join(root, 'folder.png'))
+  symlinkSync('logo.png', join(root, 'alias.png'))
 
   it('returns a data: URL', async () => {
     expect(await readImage(root, 'logo.png')).toBe(`data:image/png;base64,${png.toString('base64')}`)
@@ -99,6 +106,19 @@ describe('readImage', () => {
 
   it('refuses files that are not images', async () => {
     await expect(readImage(root, 'notes.txt')).rejects.toThrow(/Not an image/)
+  })
+
+  it('follows symlinks that stay inside the workspace', async () => {
+    expect(await readImage(root, 'alias.png')).toMatch(/^data:image\/png;base64,/)
+  })
+
+  it('refuses symlinks that lead out of the workspace', async () => {
+    await expect(readImage(root, 'escape.png')).rejects.toThrow(/outside the workspace/)
+    await expect(readImage(root, 'zero.png')).rejects.toThrow(/outside the workspace/)
+  })
+
+  it('refuses anything that is not a regular file', async () => {
+    await expect(readImage(root, 'folder.png')).rejects.toThrow(/Not an image/)
   })
 
   it('refuses images over 10 MB', async () => {
