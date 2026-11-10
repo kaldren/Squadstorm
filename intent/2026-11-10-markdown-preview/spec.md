@@ -1,6 +1,6 @@
 # Spec: Preview markdown files
 
-From: intent/2026-11-10-markdown-preview/intent.md. Status: draft.
+From: intent/2026-11-10-markdown-preview/intent.md. Status: accepted (approved by Kaloyan in session, 2026-11-10).
 Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill.
 
 ## Requirements
@@ -68,11 +68,11 @@ The default is always prevented, and `will-navigate` is already blocked, so the 
 **New dependencies (renderer):** `marked`, `dompurify`, `mermaid`; `@lezer/highlight` becomes direct (it is already installed through CodeMirror).
 
 ## Flagged concerns
-- [ ] **Raw HTML inside markdown.** READMEs often use `<details>`, `<img width=…>`, `<br>`, `<kbd>`, `<sub>`. Proposed: render it after sanitizing, as GitHub does (R8 still holds). Alternative: show raw HTML as text, which is safer but renders many READMEs wrongly.
-- [ ] **Web images reveal that you opened the file.** Loading `https://` images means a file written by someone else can include a tracking image that learns your IP address and when you previewed it. You asked for web images (open question 4). Proposed: load them automatically. Alternative: show a "Load web images" bar per file, as mail apps do.
-- [ ] **Mermaid is large** (a few MB added to the app). Proposed: accept it; it's loaded only when a file has a mermaid block, so startup and other files don't pay for it. Alternative: drop mermaid from this change.
-- [ ] **A link to another `.md` file from the preview.** Proposed: it opens that file in preview too, since you were reading, not editing. Alternative: it opens in source, like any other open.
-- [ ] **Preview scroll position isn't remembered per tab.** The view (source or preview) is remembered (R3), but the preview starts at the top each time. Proposed: accept for now. Alternative: remember it too, at some extra complexity.
+- [x] **Raw HTML inside markdown.** READMEs often use `<details>`, `<img width=…>`, `<br>`, `<kbd>`, `<sub>`. Proposed: render it after sanitizing, as GitHub does (R8 still holds). Alternative: show raw HTML as text, which is safer but renders many READMEs wrongly. **Resolved 2026-11-10: as proposed (Kaloyan asked Claude to choose and accept).**
+- [x] **Web images reveal that you opened the file.** Loading `https://` images means a file written by someone else can include a tracking image that learns your IP address and when you previewed it. You asked for web images (open question 4). Proposed: load them automatically. Alternative: show a "Load web images" bar per file, as mail apps do. **Resolved 2026-11-10: as proposed (Kaloyan asked Claude to choose and accept).**
+- [x] **Mermaid is large** (a few MB added to the app). Proposed: accept it; it's loaded only when a file has a mermaid block, so startup and other files don't pay for it. Alternative: drop mermaid from this change. **Resolved 2026-11-10: as proposed (Kaloyan asked Claude to choose and accept).**
+- [x] **A link to another `.md` file from the preview.** Proposed: it opens that file in preview too, since you were reading, not editing. Alternative: it opens in source, like any other open. **Resolved 2026-11-10: as proposed (Kaloyan asked Claude to choose and accept).**
+- [x] **Preview scroll position isn't remembered per tab.** The view (source or preview) is remembered (R3), but the preview starts at the top each time. Proposed: accept for now. Alternative: remember it too, at some extra complexity. **Resolved 2026-11-10: as proposed (Kaloyan asked Claude to choose and accept).**
 
 ## Risk
 Low to medium. No saved state changes (the preview set lives in memory, like `dirty`). The new attack surface is untrusted markdown rendered as HTML in a window whose preload exposes files and agents to the page. DOMPurify plus the existing CSP and `will-navigate` block cover it, and AC6 tests it. Widening `img-src` to `https:` affects the whole renderer, but only for images, which can't run code. Mermaid's bundle size is the main build cost. The risk to existing behaviour is the editor host being hidden or shown in the wrong combination with the conflict comparison, which AC1, AC4 and AC8 cover.
@@ -84,6 +84,6 @@ From intent.md, all answered 2026-11-10:
 - Shortcut? ⌘⇧V (R2).
 - Web images? Yes (R5); see concern 2.
 
-New: the five flagged concerns above.
+New: the five flagged concerns above, all resolved as proposed on 2026-11-10.
 
 ## Changelog
