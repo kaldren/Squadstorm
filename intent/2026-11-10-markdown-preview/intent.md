@@ -1,6 +1,6 @@
 # Intent: Preview markdown files
 
-Author: Kaloyan (owner). Status: draft.
+Author: Kaloyan (owner). Status: accepted (approved by Kaloyan in session, 2026-11-10).
 Origin: idea. Issue: none.
 
 ## Problem
