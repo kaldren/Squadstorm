@@ -27,7 +27,7 @@ Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill.
   - With a clean file in preview, write a new heading to it on disk (as an agent would): the preview shows it.
 - AC5 (R6): same file, `› links in the preview`:
   - Clicking `[site](https://example.com/x)` records `https://example.com/x` in `__squadstormOpened` (the existing e2e hook) and the app stays on the preview.
-  - Clicking `[notes](notes.md)` opens a `notes.md` tab.
+  - Clicking `[notes](notes.md)` opens a `notes.md` tab, showing its preview (concern 4).
   - Clicking `[Setup](#setup)` scrolls the `Setup` heading into view.
 - AC6 (R8): same file, `› the preview runs nothing from the file`: a fixture holding `<script>window.__pwned=1</script>`, `<img src=x onerror="window.__pwned=1">` and `<a href="javascript:window.__pwned=1">x</a>` (clicked): after previewing, `window.__pwned` is undefined, and the page has no `script` element inside `markdown-preview`.
 - AC7 (R5, R6, R8): unit tests `tests/markdown.test.ts`:
@@ -57,7 +57,7 @@ Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill.
 
 **Links (R6).** One click handler on the preview reads the link's `href` and calls `resolveLink(filePath, href)`:
 - external → `window.open(url)`, which the main process's existing `setWindowOpenHandler` sends to the system browser (and records in e2e);
-- file → `onOpenFile(path)`, CodeView's `open`; the anchor part is ignored;
+- file → `onOpenFile(path)`, CodeView's `open`; the anchor part is ignored; a `.md` target opens in preview (concern 4);
 - anchor → scroll the heading with that id into view;
 - null → nothing.
 
