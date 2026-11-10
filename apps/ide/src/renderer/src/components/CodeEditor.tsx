@@ -9,6 +9,7 @@ import { oneDark } from '@codemirror/theme-one-dark'
 import { basicSetup } from 'codemirror'
 import { diskChange } from '@shared/conflict'
 import { sendKeymap } from '../sendKeymap'
+import { MarkdownPreview } from './MarkdownPreview'
 
 interface Props {
   root: string
@@ -21,6 +22,10 @@ interface Props {
   onConflict(path: string, conflicted: boolean): void
   /** ⌘L: send these lines (or the whole file) to an agent. */
   onSend(path: string, from?: number, to?: number): void
+  /** Show the active file rendered as markdown instead of its source. */
+  preview: boolean
+  /** A link followed in the preview. */
+  onOpenFile(path: string, opts: { preview: boolean }): void
 }
 
 export interface Reveal {
@@ -66,7 +71,7 @@ export const editorTheme = [
   )
 ]
 
-export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, onSend }: Props) {
+export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, onSend, preview, onOpenFile }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const buffers = useRef(new Map<string, Buffer>())
@@ -81,8 +86,12 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, on
   /** A reveal waiting for its file to load or come on screen. */
   const pendingReveal = useRef<Reveal | null>(null)
   // Extensions are built once per file, so they reach the latest props through refs.
-  const propsRef = useRef({ root, onDirty, onConflict, onSend })
-  propsRef.current = { root, onDirty, onConflict, onSend }
+  const propsRef = useRef({ root, onDirty, onConflict, onSend, preview })
+  propsRef.current = { root, onDirty, onConflict, onSend, preview }
+  /** shownRef mirrored, so the preview re-renders when another file comes on screen. */
+  const [shown, setShown] = useState<string | null>(null)
+  /** Bumped when the shown file's text changes while previewed (an agent's edit reloaded from disk). */
+  const [, setDocVersion] = useState(0)
 
   const liveState = (path: string, buffer: Buffer & { state: EditorState }) =>
     shownRef.current === path && viewRef.current ? viewRef.current.state : buffer.state
@@ -217,6 +226,7 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, on
           if (u.docChanged && buffer && 'saved' in buffer) {
             propsRef.current.onDirty(path, u.state.doc.toString() !== buffer.saved)
           }
+          if (u.docChanged && shownRef.current === path && propsRef.current.preview) setDocVersion((v) => v + 1)
         })
       ]
     })
@@ -247,6 +257,7 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, on
       prevBuffer.scroll = view.scrollSnapshot()
     }
     shownRef.current = null
+    setShown(null)
     setComparing(false)
     setShownConflict(null)
     const buffer = path !== null ? buffers.current.get(path) : undefined
@@ -255,6 +266,7 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, on
     if ('error' in buffer) return setMessage(buffer.error)
     view.setState(buffer.state)
     shownRef.current = path
+    setShown(path)
     setMessage(null)
     setShownConflict(buffer.conflict ?? null)
     const r = pendingReveal.current
@@ -265,7 +277,8 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, on
     }
     requestAnimationFrame(() => {
       if (buffer.scroll) view.dispatch({ effects: buffer.scroll })
-      view.focus()
+      // A previewed file keeps focus in the preview, so no key edits the hidden source.
+      if (!propsRef.current.preview) view.focus()
     })
   }
 
@@ -277,8 +290,17 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, on
   // A file's first showing focuses it in show(), but the host is still invisible then and
   // refuses focus; try again once it is visible.
   useEffect(() => {
-    if (message === null) viewRef.current?.focus()
+    if (message === null && !propsRef.current.preview) viewRef.current?.focus()
   }, [message])
+
+  // Entering the preview takes focus away from the (now hidden) source; leaving it gives it back.
+  const previewedOnce = useRef(false)
+  useLayoutEffect(() => {
+    if (!previewedOnce.current && !preview) return
+    previewedOnce.current = true
+    if (preview) viewRef.current?.contentDOM.blur()
+    else if (shownRef.current !== null) viewRef.current?.focus()
+  }, [preview])
 
   // Declared before the file switch below so a reveal into another file is pending by the time it shows.
   useEffect(() => {
@@ -335,10 +357,13 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, on
   useLayoutEffect(() => {
     if (!refocus.current || conflict !== null || comparing) return
     refocus.current = false
-    viewRef.current?.focus()
+    // Never the hidden source under a preview.
+    if (!propsRef.current.preview) viewRef.current?.focus()
   }, [conflict, comparing])
 
   const showConflict = conflict !== null && message === null
+  const previewing = preview && message === null
+  const previewed = previewing && shown !== null && shown === active && !(showConflict && comparing) ? shown : null
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -355,9 +380,18 @@ export function CodeEditor({ root, tabs, active, reveal, onDirty, onConflict, on
         {/* Hidden while comparing, so its tooltips (autocomplete) don't float over the comparison. */}
         <div
           ref={hostRef}
-          className={`h-full ${message !== null || (showConflict && comparing) ? 'invisible' : ''}`}
+          className={`h-full ${message !== null || previewing || (showConflict && comparing) ? 'invisible' : ''}`}
           data-testid="code-editor"
         />
+        {previewed !== null && viewRef.current && (
+          <MarkdownPreview
+            key={previewed}
+            root={root}
+            path={previewed}
+            source={viewRef.current.state.doc.toString()}
+            onOpenFile={onOpenFile}
+          />
+        )}
         {message && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-muted">{message}</div>
         )}

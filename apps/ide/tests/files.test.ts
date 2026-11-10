@@ -1,5 +1,8 @@
+import { mkdirSync, mkdtempSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { resolveInside } from '../src/main/files'
+import { readImage, resolveInside } from '../src/main/files'
 import { fuzzyMatch, isWatched, parentDir, searchFiles, sortEntries } from '../src/shared/files'
 
 describe('resolveInside', () => {
@@ -73,5 +76,52 @@ describe('searchFiles', () => {
     expect(searchFiles('zzz', paths)).toEqual([])
     expect(searchFiles('', paths).map((m) => m.path)).toEqual(paths)
     expect(searchFiles('', paths, 2)).toHaveLength(2)
+  })
+})
+
+describe('readImage', () => {
+  const root = mkdtempSync(join(tmpdir(), 'squadstorm-images-'))
+  // A 1×1 PNG.
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64')
+  writeFileSync(join(root, 'logo.png'), png)
+  writeFileSync(join(root, 'notes.txt'), 'not an image')
+  // Sparse, so it takes no real space.
+  writeFileSync(join(root, 'huge.png'), '')
+  truncateSync(join(root, 'huge.png'), 11 * 1024 * 1024)
+  // What a cloned repo could hold: links out of it, to a device, and a folder named like an image.
+  const outside = mkdtempSync(join(tmpdir(), 'squadstorm-outside-'))
+  writeFileSync(join(outside, 'secret.png'), png)
+  symlinkSync(join(outside, 'secret.png'), join(root, 'escape.png'))
+  symlinkSync('/dev/zero', join(root, 'zero.png'))
+  mkdirSync(join(root, 'folder.png'))
+  symlinkSync('logo.png', join(root, 'alias.png'))
+
+  it('returns a data: URL', async () => {
+    expect(await readImage(root, 'logo.png')).toBe(`data:image/png;base64,${png.toString('base64')}`)
+  })
+
+  it('refuses paths outside the workspace', async () => {
+    await expect(readImage(root, '../x.png')).rejects.toThrow(/outside the workspace/)
+  })
+
+  it('refuses files that are not images', async () => {
+    await expect(readImage(root, 'notes.txt')).rejects.toThrow(/Not an image/)
+  })
+
+  it('follows symlinks that stay inside the workspace', async () => {
+    expect(await readImage(root, 'alias.png')).toMatch(/^data:image\/png;base64,/)
+  })
+
+  it('refuses symlinks that lead out of the workspace', async () => {
+    await expect(readImage(root, 'escape.png')).rejects.toThrow(/outside the workspace/)
+    await expect(readImage(root, 'zero.png')).rejects.toThrow(/outside the workspace/)
+  })
+
+  it('refuses anything that is not a regular file', async () => {
+    await expect(readImage(root, 'folder.png')).rejects.toThrow(/Not an image/)
+  })
+
+  it('refuses images over 10 MB', async () => {
+    await expect(readImage(root, 'huge.png')).rejects.toThrow(/too large/)
   })
 })

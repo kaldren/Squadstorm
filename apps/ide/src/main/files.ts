@@ -1,9 +1,20 @@
 import { watch, type FSWatcher } from 'node:fs'
-import { open, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { open, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { isHidden, isSearched, isWatched, sortEntries, type FileEntry, type ReadResult } from '@shared/files'
 
 const MAX_EDITABLE_BYTES = 2 * 1024 * 1024
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+const IMAGE_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  avif: 'image/avif'
+}
 
 /** Resolves a renderer-supplied relative path, refusing anything that escapes the root. */
 export function resolveInside(root: string, path: string): string {
@@ -58,6 +69,25 @@ export async function readText(root: string, path: string): Promise<ReadResult> 
   } finally {
     await handle.close()
   }
+}
+
+/**
+ * An image in the workspace as a data: URL, for the markdown preview. Previewing someone else's
+ * markdown reads these without the user picking the file, so a symlink must not lead outside the
+ * workspace or to a device (`/dev/zero` would read forever).
+ */
+export async function readImage(root: string, path: string): Promise<string> {
+  const full = resolveInside(root, path)
+  const type = IMAGE_TYPES[path.split('.').pop()?.toLowerCase() ?? '']
+  if (!type) throw new Error(`Not an image: ${path}`)
+  const real = await realpath(full)
+  const rel = relative(await realpath(root), real)
+  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error(`Path is outside the workspace: ${path}`)
+  // Checked before opening: opening a named pipe would block.
+  const stats = await stat(real)
+  if (!stats.isFile()) throw new Error(`Not an image: ${path}`)
+  if (stats.size > MAX_IMAGE_BYTES) throw new Error(`Image is too large to show: ${path}`)
+  return `data:${type};base64,${(await readFile(real)).toString('base64')}`
 }
 
 export async function writeText(root: string, path: string, content: string): Promise<void> {
