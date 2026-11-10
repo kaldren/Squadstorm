@@ -4,6 +4,17 @@ import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { isHidden, isSearched, isWatched, sortEntries, type FileEntry, type ReadResult } from '@shared/files'
 
 const MAX_EDITABLE_BYTES = 2 * 1024 * 1024
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+const IMAGE_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  avif: 'image/avif'
+}
 
 /** Resolves a renderer-supplied relative path, refusing anything that escapes the root. */
 export function resolveInside(root: string, path: string): string {
@@ -58,6 +69,16 @@ export async function readText(root: string, path: string): Promise<ReadResult> 
   } finally {
     await handle.close()
   }
+}
+
+/** An image in the workspace as a data: URL, for the markdown preview. */
+export async function readImage(root: string, path: string): Promise<string> {
+  const full = resolveInside(root, path)
+  const type = IMAGE_TYPES[path.split('.').pop()?.toLowerCase() ?? '']
+  if (!type) throw new Error(`Not an image: ${path}`)
+  const { size } = await stat(full)
+  if (size > MAX_IMAGE_BYTES) throw new Error(`Image is too large to show: ${path}`)
+  return `data:${type};base64,${(await readFile(full)).toString('base64')}`
 }
 
 export async function writeText(root: string, path: string, content: string): Promise<void> {

@@ -1,5 +1,8 @@
+import { mkdtempSync, truncateSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { resolveInside } from '../src/main/files'
+import { readImage, resolveInside } from '../src/main/files'
 import { fuzzyMatch, isWatched, parentDir, searchFiles, sortEntries } from '../src/shared/files'
 
 describe('resolveInside', () => {
@@ -73,5 +76,32 @@ describe('searchFiles', () => {
     expect(searchFiles('zzz', paths)).toEqual([])
     expect(searchFiles('', paths).map((m) => m.path)).toEqual(paths)
     expect(searchFiles('', paths, 2)).toHaveLength(2)
+  })
+})
+
+describe('readImage', () => {
+  const root = mkdtempSync(join(tmpdir(), 'squadstorm-images-'))
+  // A 1×1 PNG.
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64')
+  writeFileSync(join(root, 'logo.png'), png)
+  writeFileSync(join(root, 'notes.txt'), 'not an image')
+  // Sparse, so it takes no real space.
+  writeFileSync(join(root, 'huge.png'), '')
+  truncateSync(join(root, 'huge.png'), 11 * 1024 * 1024)
+
+  it('returns a data: URL', async () => {
+    expect(await readImage(root, 'logo.png')).toBe(`data:image/png;base64,${png.toString('base64')}`)
+  })
+
+  it('refuses paths outside the workspace', async () => {
+    await expect(readImage(root, '../x.png')).rejects.toThrow(/outside the workspace/)
+  })
+
+  it('refuses files that are not images', async () => {
+    await expect(readImage(root, 'notes.txt')).rejects.toThrow(/Not an image/)
+  })
+
+  it('refuses images over 10 MB', async () => {
+    await expect(readImage(root, 'huge.png')).rejects.toThrow(/too large/)
   })
 })

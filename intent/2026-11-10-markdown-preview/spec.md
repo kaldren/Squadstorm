@@ -87,3 +87,4 @@ From intent.md, all answered 2026-11-10:
 New: the five flagged concerns above, all resolved as proposed on 2026-11-10.
 
 ## Changelog
+- 2026-11-10 — Design: headings get a `data-anchor` attribute rather than an `id`, and the file's own `id`/`name` attributes are stripped, so untrusted markdown can't clash with the app's element ids. `#heading` links behave the same (AC5). Found while implementing; see plan.md Deviations.

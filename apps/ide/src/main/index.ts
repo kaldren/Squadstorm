@@ -5,7 +5,7 @@ import type { FileChange } from '@shared/git'
 import type { AgentWorktree } from '@shared/types'
 import type { SearchQuery } from '@shared/search'
 import type { AppState } from '@shared/types'
-import { FileWatchers, listDir, readText, writeText, writeTextIfUnchanged } from './files'
+import { FileWatchers, listDir, readImage, readText, writeText, writeTextIfUnchanged } from './files'
 import { gitCommit, gitCommitDiff, gitCommitFiles, gitDiff, gitDiscard, gitLog, gitNumstat, gitPush, gitStatus } from './git'
 import { cloneRepo, githubStatus, listRepos } from './github'
 import { PtyManager } from './pty'
@@ -217,6 +217,7 @@ function registerIpc(): void {
     return searchWorkspace(root, query, () => searchIds.get(root) !== id)
   })
   ipcMain.handle('files:read', (_e, root: string, path: string) => readText(root, path))
+  ipcMain.handle('files:readImage', (_e, root: string, path: string) => readImage(root, path))
   ipcMain.handle('files:write', (_e, root: string, path: string, content: string) =>
     writeText(root, path, content)
   )
