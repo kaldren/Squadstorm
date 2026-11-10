@@ -1,6 +1,6 @@
 # Plan: Preview markdown files
 
-From: intent.md + spec.md in intent/2026-11-10-markdown-preview/. Status: draft.
+From: intent.md + spec.md in intent/2026-11-10-markdown-preview/. Status: accepted (approved by Kaloyan in session, 2026-11-10).
 Written without changing any code.
 
 ## Files that change
