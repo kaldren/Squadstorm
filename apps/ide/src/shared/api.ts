@@ -90,6 +90,8 @@ export interface SquadstormApi {
     /** Searches file contents. A newer search of the same root cuts an older one short. */
     search(root: string, query: SearchQuery): Promise<SearchResult>
     read(root: string, path: string): Promise<ReadResult>
+    /** An image in the workspace as a data: URL, for the markdown preview. */
+    readImage(root: string, path: string): Promise<string>
     write(root: string, path: string, content: string): Promise<void>
     /** Writes only if the file still holds `expected` (null: absent); rejects otherwise. */
     writeIfUnchanged(root: string, path: string, expected: string | null, content: string): Promise<void>

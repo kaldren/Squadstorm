@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import type { Commit, FileChange } from '@shared/git'
 import { ChangesPanel, useGitStatus } from './ChangesPanel'
 import type { TextMatch } from '@shared/search'
+import { isMarkdown } from '@shared/markdown'
 import { CodeEditor, type Reveal } from './CodeEditor'
 import { DiffView } from './DiffView'
 import { FileTree } from './FileTree'
@@ -21,6 +22,8 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
   const [dirty, setDirty] = useState<ReadonlySet<string>>(new Set())
   // Files that changed on disk while they had unsaved edits.
   const [conflicts, setConflicts] = useState<ReadonlySet<string>>(new Set())
+  // Markdown files showing their preview instead of their source.
+  const [previews, setPreviews] = useState<ReadonlySet<string>>(new Set())
   const [side, setSide] = useState<'files' | 'search' | 'changes' | 'history'>('files')
   const [reveal, setReveal] = useState<Reveal | null>(null)
   const [searchFocus, setSearchFocus] = useState(0)
@@ -69,6 +72,7 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
       if (!combo || e.altKey) return
       const key = e.key.toLowerCase()
       if (key === 'p' && !e.shiftKey) setSearching(true)
+      else if (key === 'v' && e.shiftKey && previewRef.current.canPreview) previewRef.current.toggle()
       else if (key === 'f' && e.shiftKey) {
         setSide('search')
         setSearchFocus((n) => n + 1)
@@ -80,9 +84,12 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [hidden])
 
-  const open = (path: string, at?: TextMatch) => {
+  const open = (path: string, at?: TextMatch, opts?: { preview?: boolean }) => {
     setDiff(null)
     setReviewing(false)
+    // A match points at a line in the source; a link from a preview opens the next file in preview.
+    if (at) setPreviews((p) => toggleIn(p, path, false))
+    else if (opts?.preview) setPreviews((p) => toggleIn(p, path, true))
     setSearchSelected(at ? { path, match: at } : null)
     if (at) setReveal({ path, line: at.line, column: at.column, length: at.length })
     setTabs((t) => (t.includes(path) ? t : [...t, path]))
@@ -105,6 +112,7 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
     setTabs(rest)
     markDirty(path, false)
     markConflict(path, false)
+    setPreviews((p) => toggleIn(p, path, false))
     if (active === path) setActive(rest[Math.min(index, rest.length - 1)] ?? null)
   }
 
@@ -117,6 +125,15 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
   }
   const markDirty = (path: string, isDirty: boolean) => setDirty((d) => toggleIn(d, path, isDirty))
   const markConflict = (path: string, conflicted: boolean) => setConflicts((c) => toggleIn(c, path, conflicted))
+
+  const canPreview = active !== null && isMarkdown(active) && !diff && !reviewing
+  const previewing = canPreview && previews.has(active)
+  const togglePreview = () => {
+    if (active !== null) setPreviews((p) => toggleIn(p, active, !p.has(active)))
+  }
+  // Read by the ⌘⇧V handler, which is registered once per visibility change.
+  const previewRef = useRef({ canPreview, toggle: togglePreview })
+  previewRef.current = { canPreview, toggle: togglePreview }
 
   return (
     <div className={`${hidden ? 'hidden' : 'flex'} relative min-h-0 flex-1`}>
@@ -210,55 +227,68 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
         <Panel id="editor" minSize={300}>
           <div className="flex h-full flex-col">
             {tabs.length > 0 && (
-              <div className="flex h-8 shrink-0 overflow-x-auto border-b border-line bg-panel text-xs">
-                {tabs.map((path) => (
-                  <div
-                    key={path}
-                    role="tab"
-                    aria-selected={path === active && !diff && !reviewing}
-                    title={path}
-                    data-testid="editor-tab"
-                    className={`group flex shrink-0 cursor-pointer items-center gap-1.5 border-r border-line pr-1.5 pl-3 ${
-                      path === active && !diff && !reviewing ? 'bg-bg text-fg' : 'text-muted hover:text-fg'
-                    }`}
-                    onClick={() => {
-                      setDiff(null)
-                      setReviewing(false)
-                      setActive(path)
-                    }}
-                    onAuxClick={(e) => e.button === 1 && close(path)}
-                  >
-                    {basename(path)}
-                    <button
-                      className="flex h-4 w-4 items-center justify-center rounded hover:bg-raised"
-                      aria-label={`Close ${basename(path)}`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        close(path)
+              <div className="flex h-8 shrink-0 border-b border-line bg-panel text-xs">
+                <div className="flex min-w-0 flex-1 overflow-x-auto">
+                  {tabs.map((path) => (
+                    <div
+                      key={path}
+                      role="tab"
+                      aria-selected={path === active && !diff && !reviewing}
+                      title={path}
+                      data-testid="editor-tab"
+                      className={`group flex shrink-0 cursor-pointer items-center gap-1.5 border-r border-line pr-1.5 pl-3 ${
+                        path === active && !diff && !reviewing ? 'bg-bg text-fg' : 'text-muted hover:text-fg'
+                      }`}
+                      onClick={() => {
+                        setDiff(null)
+                        setReviewing(false)
+                        setActive(path)
                       }}
+                      onAuxClick={(e) => e.button === 1 && close(path)}
                     >
-                      {/* Unsaved files show a dot that turns into the close button on hover; amber when the
-                          file also changed on disk. */}
-                      {conflicts.has(path) ? (
-                        <>
-                          <span
-                            className="h-1.5 w-1.5 rounded-full bg-amber-400 group-hover:hidden"
-                            title="Changed on disk while you had unsaved edits"
-                            data-testid="conflict-dot"
-                          />
-                          <span className="hidden group-hover:inline">✕</span>
-                        </>
-                      ) : dirty.has(path) ? (
-                        <>
-                          <span className="h-1.5 w-1.5 rounded-full bg-fg group-hover:hidden" data-testid="dirty-dot" />
-                          <span className="hidden group-hover:inline">✕</span>
-                        </>
-                      ) : (
-                        <span className={path === active && !diff && !reviewing ? '' : 'invisible group-hover:visible'}>✕</span>
-                      )}
-                    </button>
-                  </div>
-                ))}
+                      {basename(path)}
+                      <button
+                        className="flex h-4 w-4 items-center justify-center rounded hover:bg-raised"
+                        aria-label={`Close ${basename(path)}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          close(path)
+                        }}
+                      >
+                        {/* Unsaved files show a dot that turns into the close button on hover; amber when the
+                            file also changed on disk. */}
+                        {conflicts.has(path) ? (
+                          <>
+                            <span
+                              className="h-1.5 w-1.5 rounded-full bg-amber-400 group-hover:hidden"
+                              title="Changed on disk while you had unsaved edits"
+                              data-testid="conflict-dot"
+                            />
+                            <span className="hidden group-hover:inline">✕</span>
+                          </>
+                        ) : dirty.has(path) ? (
+                          <>
+                            <span className="h-1.5 w-1.5 rounded-full bg-fg group-hover:hidden" data-testid="dirty-dot" />
+                            <span className="hidden group-hover:inline">✕</span>
+                          </>
+                        ) : (
+                          <span className={path === active && !diff && !reviewing ? '' : 'invisible group-hover:visible'}>✕</span>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {canPreview && (
+                  <button
+                    className={`shrink-0 border-l border-line px-3 ${previewing ? 'text-fg' : 'text-muted hover:text-fg'}`}
+                    title="Preview (⌘⇧V)"
+                    aria-pressed={previewing}
+                    data-testid="markdown-preview-toggle"
+                    onClick={togglePreview}
+                  >
+                    Preview
+                  </button>
+                )}
               </div>
             )}
             {reviewing && !diff && (
@@ -283,6 +313,8 @@ export function CodeView({ root, hidden }: { root: string; hidden: boolean }) {
                 onDirty={markDirty}
                 onConflict={markConflict}
                 onSend={send}
+                preview={previewing}
+                onOpenFile={(path, opts) => open(path, undefined, opts)}
               />
             </div>
           </div>

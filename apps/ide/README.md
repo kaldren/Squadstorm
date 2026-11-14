@@ -64,6 +64,9 @@ Select some lines and press **⌘L** (or use **→** on a file in the tree or in
 ### 🔎 Quick Open and project search
 **⌘P** fuzzy-finds any file. **⇧⌘F** searches the whole project, with match-case, whole-word, regex and include/exclude filters.
 
+### 📖 Markdown preview
+**⇧⌘V** (or **Preview** at the end of the tab bar) shows a markdown file rendered, with code colours, images and mermaid diagrams, including edits you haven't saved. Each tab remembers whether it was showing the preview, and links open in your browser or as tabs.
+
 <table>
   <tr>
     <td><img src="docs/screenshots/quick-open.png" alt="Quick Open" /></td>
@@ -115,6 +118,7 @@ pnpm dist          # from apps/ide: builds Squadstorm.app into apps/ide/dist/
 | **⌘P** | Quick Open a file |
 | **⇧⌘F** | Search the project |
 | **⌘S** | Save the current file |
+| **⇧⌘V** | Preview a markdown file |
 | **⌘L** | Send the selection (or file) to an agent |
 | **⌘-click** | Open a path or URL printed by an agent |
 | **⌘↵** | Commit (in the Changes panel) |

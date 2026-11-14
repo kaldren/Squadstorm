@@ -30,6 +30,7 @@ const api: SquadstormApi = {
     all: (root) => ipcRenderer.invoke('files:all', root),
     search: (root, query) => ipcRenderer.invoke('files:search', root, query),
     read: (root, path) => ipcRenderer.invoke('files:read', root, path),
+    readImage: (root, path) => ipcRenderer.invoke('files:readImage', root, path),
     write: (root, path, content) => ipcRenderer.invoke('files:write', root, path, content),
     writeIfUnchanged: (root, path, expected, content) =>
       ipcRenderer.invoke('files:writeIfUnchanged', root, path, expected, content),
