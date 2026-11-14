@@ -1,6 +1,6 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -36,8 +36,10 @@ interface Session {
   answers: boolean[]
 }
 
-async function open(): Promise<Session> {
+/** `setup` changes the project before the app opens it. */
+async function open(setup?: (dir: string) => void): Promise<Session> {
   const dir = project()
+  setup?.(dir)
   const app = await electron.launch({
     args: ['.'],
     env: {
@@ -152,11 +154,88 @@ test('discard all', async () => {
 
 test("discard all leaves changes it wasn't given alone", async () => {
   const s = await open()
-  const result = await s.page.evaluate((dir) => window.api.git.discardAll(dir, ['src/a.ts', 'not-changed.ts']), s.dir)
+  const result = await s.page.evaluate(
+    (dir) =>
+      window.api.git.discardAll(dir, [
+        { path: 'src/a.ts', kind: 'M' },
+        { path: 'not-changed.ts', kind: 'M' }
+      ]),
+    s.dir
+  )
   expect(result).toEqual({ discarded: 1, skipped: [] })
   expect(read(s, 'src/a.ts')).toBe(lines(20))
   expect(read(s, 'b.ts')).toBeNull()
   expect(read(s, 'c.ts')).toBe('one\ntwo\nthree\n')
+  await s.app.close()
+})
+
+test('discard all skips conflicts and failures, keeps going, and undoes renames and staged files', async () => {
+  const s = await open((dir) => {
+    git(dir, 'checkout', '-q', '--', '.')
+    mkdirSync(join(dir, 'ro'))
+    writeFileSync(join(dir, 'ro', 'x.ts'), 'committed\n')
+    // A merge conflict.
+    writeFileSync(join(dir, 'conflict.ts'), 'base\n')
+    git(dir, 'add', '-A')
+    git(dir, 'commit', '-q', '-m', 'base')
+    git(dir, 'checkout', '-q', '-b', 'other')
+    writeFileSync(join(dir, 'conflict.ts'), 'theirs\n')
+    git(dir, 'commit', '-q', '-am', 'theirs')
+    git(dir, 'checkout', '-q', 'main')
+    writeFileSync(join(dir, 'conflict.ts'), 'ours\n')
+    git(dir, 'commit', '-q', '-am', 'ours')
+    try {
+      git(dir, 'merge', '-q', 'other')
+    } catch {
+      // Expected: the merge stops on the conflict.
+    }
+    // A file in a folder that can't be written, so discarding it fails.
+    writeFileSync(join(dir, 'ro', 'x.ts'), 'edited\n')
+    chmodSync(join(dir, 'ro'), 0o555)
+    // A staged new file that was then deleted, a rename that was then deleted, and a plain rename,
+    // which sorts after the failing file.
+    writeFileSync(join(dir, 'n.ts'), 'new\n')
+    git(dir, 'add', 'n.ts')
+    rmSync(join(dir, 'n.ts'))
+    git(dir, 'mv', 'b.ts', 'moved.ts')
+    rmSync(join(dir, 'moved.ts'))
+    git(dir, 'mv', 'src/a.ts', 'src/renamed.ts')
+  })
+  try {
+    await s.page.getByRole('tab', { name: 'changes' }).click()
+    await expect(s.page.getByTestId('change-entry')).toHaveCount(5)
+    await s.page.getByTestId('discard-all').click()
+
+    // Everything else is undone; the conflict and the file that couldn't be written stay, and both are named.
+    await expect(s.page.getByTestId('git-error')).toContainText('conflict.ts')
+    await expect(s.page.getByTestId('git-error')).toContainText('ro/x.ts')
+    expect(git(s.dir, 'status', '--porcelain')).toBe('UU conflict.ts\n M ro/x.ts\n')
+    expect(read(s, 'b.ts')).toBe('export const b = 1\n')
+    expect(read(s, 'src/a.ts')).toBe(lines(20))
+    expect(read(s, 'src/renamed.ts')).toBeNull()
+    expect(read(s, 'moved.ts')).toBeNull()
+  } finally {
+    chmodSync(join(s.dir, 'ro'), 0o755)
+    await s.app.close()
+  }
+})
+
+test('discard all leaves a change alone if it is no longer what was confirmed', async () => {
+  const s = await open()
+  // Confirmed while b.ts was deleted; an agent has written a new b.ts since.
+  writeFileSync(join(s.dir, 'b.ts'), 'agent rewrite\n')
+  const result = await s.page.evaluate(
+    (dir) =>
+      window.api.git.discardAll(dir, [
+        { path: 'b.ts', kind: 'D' },
+        { path: 'c.ts', kind: 'A' }
+      ]),
+    s.dir
+  )
+  expect(result.discarded).toBe(1)
+  expect(result.skipped.map((x) => x.path)).toEqual(['b.ts'])
+  expect(read(s, 'b.ts')).toBe('agent rewrite\n')
+  expect(read(s, 'c.ts')).toBeNull()
   await s.app.close()
 })
 

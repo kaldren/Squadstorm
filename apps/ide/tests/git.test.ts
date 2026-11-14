@@ -87,7 +87,6 @@ describe('commitPathspec', () => {
   })
 })
 
-
 describe('discardAllPrompt', () => {
   it('counts what goes back to the last commit and what goes to the Trash', () => {
     expect(
@@ -98,7 +97,15 @@ describe('discardAllPrompt', () => {
         { path: 'c.ts', kind: 'A' },
         { path: 'd.ts', kind: 'A' }
       ])
-    ).toBe("Discard all 5 changes? 3 edited files go back to the last commit and can't be recovered. 2 new files go to the Trash.")
+    ).toBe(
+      "Discard all 5 changes? 2 edited files go back to the last commit and can't be recovered. 1 renamed file gets its old name back and the renamed copy goes to the Trash. 2 new files go to the Trash."
+    )
+    expect(
+      discardAllPrompt([
+        { path: 'a.ts', kind: 'R', from: 'x.ts' },
+        { path: 'b.ts', kind: 'R', from: 'y.ts' }
+      ])
+    ).toBe('Discard all 2 changes? 2 renamed files get their old names back and the renamed copies go to the Trash.')
   })
 
   it('uses the singular and leaves out parts that are empty', () => {
