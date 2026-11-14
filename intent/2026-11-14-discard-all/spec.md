@@ -42,3 +42,4 @@ From intent.md:
 - Conflicted files? **Answered:** skipped and reported (concern 1).
 
 ## Changelog
+- 2026-11-15 — From review: `git.discardAll` takes `{ path, kind }` per confirmed change, not just paths, and leaves a change alone if its kind changed since the confirmation (R3). It carries on past a change it can't discard and returns `skipped: { path, reason }[]` (conflicts, changed since, errors), which the panel lists. The prompt names renamed files separately, since their renamed copy goes to the Trash.

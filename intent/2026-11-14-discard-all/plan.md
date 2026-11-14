@@ -39,3 +39,7 @@ Step 2, because it deletes and restores many files. It reuses the per-file path 
 
 ## Deviations
 - 2026-11-15 — The button shows only when at least one change can be discarded (not when every change is a conflict), since it would do nothing there. `git status` in the e2e test also checks the tree is clean after Discard all.
+- 2026-11-15 — From review, failing tests first (`e2e/review.spec.ts › discard all skips conflicts and failures…`, `› …no longer what was confirmed`):
+  - `gitDiscardAll` catches per change and keeps going; skipped changes come back with a reason;
+  - `trash` does nothing for a file that's already gone (a staged new file deleted since), and the e2e stub no longer hides a missing file (`rm` without `force`);
+  - `discardChange` undoes a rename whenever git gives a `from`, so a rename deleted since (`RD`, reported as `D`) restores the old path too. This also fixes per-file discard for that case.

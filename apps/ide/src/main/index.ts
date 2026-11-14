@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron'
 import { join } from 'node:path'
 import type { AttentionNotice, SpawnRequest } from '@shared/api'
-import type { FileChange } from '@shared/git'
+import type { ChangeKind, FileChange } from '@shared/git'
 import type { AgentWorktree } from '@shared/types'
 import type { SearchQuery } from '@shared/search'
 import type { AppState } from '@shared/types'
@@ -238,8 +238,11 @@ function registerIpc(): void {
   )
   ipcMain.handle('git:numstat', (_e, root: string) => gitNumstat(root))
   ipcMain.handle('git:discard', (_e, root: string, change: FileChange) => gitDiscard(root, change))
-  ipcMain.handle('git:discardAll', (_e, root: string, paths: string[]) =>
-    gitDiscardAll(root, Array.isArray(paths) ? paths.map(String) : [])
+  ipcMain.handle('git:discardAll', (_e, root: string, confirmed: unknown) =>
+    gitDiscardAll(
+      root,
+      (Array.isArray(confirmed) ? confirmed : []).map((c) => ({ path: String(c?.path), kind: String(c?.kind) as ChangeKind }))
+    )
   )
   ipcMain.handle('git:push', (_e, root: string) => gitPush(root))
 

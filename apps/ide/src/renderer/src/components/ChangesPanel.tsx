@@ -108,9 +108,10 @@ export function ChangesPanel({ root, status, loaded, statusError, refresh, selec
     const shown = status.changes
     if (!confirm(discardAllPrompt(shown))) return
     void act('discard', async () => {
-      const { skipped } = await window.api.git.discardAll(root, shown.map((c) => c.path))
+      const { skipped } = await window.api.git.discardAll(root, shown.map((c) => ({ path: c.path, kind: c.kind })))
       if (skipped.length) {
-        throw new Error(`Left ${skipped.length === 1 ? 'a file' : `${skipped.length} files`} with merge conflicts as is: ${skipped.join(', ')}`)
+        const list = skipped.map((s) => `${s.path}: ${s.reason}`).join('\n')
+        throw new Error(`Left ${skipped.length === 1 ? '1 file' : `${skipped.length} files`} as they were:\n${list}`)
       }
     })
   }

@@ -157,17 +157,34 @@ export function commitPathspec(changes: FileChange[], selected: ReadonlySet<stri
   return changes.filter((c) => selected.has(c.path)).flatMap((c) => (c.from ? [c.from, c.path] : [c.path]))
 }
 
+/** A change the user confirmed discarding, as it was when they confirmed. */
+export interface DiscardRequest {
+  path: string
+  kind: ChangeKind
+}
+
+export interface DiscardAllResult {
+  discarded: number
+  /** Changes left as they are, and why. */
+  skipped: { path: string; reason: string }[]
+}
+
 /** The confirmation shown before Discard all: what goes back to HEAD, what goes to the Trash, what stays. */
 export function discardAllPrompt(changes: FileChange[]): string {
   const count = (kinds: ChangeKind[]) => changes.filter((c) => kinds.includes(c.kind)).length
   const files = (n: number, what: string, one: string, many: string) => `${n} ${what}${n === 1 ? '' : 's'} ${n === 1 ? one : many}`
-  const edited = count(['M', 'D', 'R'])
+  const edited = count(['M', 'D'])
+  const renamed = count(['R'])
   const added = count(['A'])
   const conflicts = count(['C'])
-  const n = edited + added
+  const n = edited + renamed + added
   return [
     `Discard all ${n} change${n === 1 ? '' : 's'}?`,
     edited && `${files(edited, 'edited file', 'goes', 'go')} back to the last commit and can't be recovered.`,
+    renamed &&
+      (renamed === 1
+        ? '1 renamed file gets its old name back and the renamed copy goes to the Trash.'
+        : `${renamed} renamed files get their old names back and the renamed copies go to the Trash.`),
     added && `${files(added, 'new file', 'goes', 'go')} to the Trash.`,
     conflicts && (conflicts === 1 ? '1 file with a merge conflict stays as it is.' : `${conflicts} files with merge conflicts stay as they are.`)
   ]

@@ -1,6 +1,6 @@
 import type { FileEntry, ReadResult } from './files'
 import type { SearchQuery, SearchResult } from './search'
-import type { Commit, DiffSides, FileChange, GitStatus, LineStats } from './git'
+import type { Commit, DiffSides, DiscardAllResult, DiscardRequest, FileChange, GitStatus, LineStats } from './git'
 import type { AgentWorktree, AppState } from './types'
 import type { LaunchMode, Provider } from './providers'
 
@@ -113,8 +113,8 @@ export interface SquadstormApi {
     numstat(root: string): Promise<Record<string, LineStats>>
     /** Throws away a file's uncommitted change (new files go to the Trash). */
     discard(root: string, change: FileChange): Promise<void>
-    /** Discards each listed path's current change, as `discard` would; conflicts are skipped. */
-    discardAll(root: string, paths: string[]): Promise<{ discarded: number; skipped: string[] }>
+    /** Discards each confirmed change as `discard` would, carrying on past any it can't; see `DiscardAllResult`. */
+    discardAll(root: string, confirmed: DiscardRequest[]): Promise<DiscardAllResult>
     /** Pushes the current branch, publishing it to origin if it has no upstream yet. */
     push(root: string): Promise<void>
   }
