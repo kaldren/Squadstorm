@@ -121,6 +121,45 @@ test('discard a file', async () => {
   await s.app.close()
 })
 
+test('discard all', async () => {
+  const s = await open()
+  await s.page.getByRole('tab', { name: 'changes' }).click()
+  await expect(s.page.getByTestId('change-entry')).toHaveCount(3)
+  const prompts: string[] = []
+  s.page.on('dialog', (d) => void prompts.push(d.message()))
+
+  // Cancelling changes nothing.
+  s.answers.push(false)
+  await s.page.getByTestId('discard-all').click()
+  await expect.poll(() => prompts.length).toBe(1)
+  await s.page.waitForTimeout(300)
+  expect(read(s, 'src/a.ts')).toContain('agent change one')
+  expect(read(s, 'b.ts')).toBeNull()
+  expect(read(s, 'c.ts')).toBe('one\ntwo\nthree\n')
+
+  // Confirming puts everything back to the last commit and the new file in the Trash.
+  await s.page.getByTestId('discard-all').click()
+  await expect.poll(() => read(s, 'c.ts')).toBeNull()
+  expect(prompts[1]).toBe("Discard all 3 changes? 2 edited files go back to the last commit and can't be recovered. 1 new file goes to the Trash.")
+  expect(read(s, 'src/a.ts')).toBe(lines(20))
+  expect(read(s, 'b.ts')).toBe('export const b = 1\n')
+  expect(await s.app.evaluate(() => (globalThis as any).__squadstormTrashed)).toEqual([join(s.dir, 'c.ts')])
+  expect(git(s.dir, 'status', '--porcelain')).toBe('')
+  await expect(s.page.getByText('No changes.')).toBeVisible()
+  await expect(s.page.getByTestId('discard-all')).toHaveCount(0)
+  await s.app.close()
+})
+
+test("discard all leaves changes it wasn't given alone", async () => {
+  const s = await open()
+  const result = await s.page.evaluate((dir) => window.api.git.discardAll(dir, ['src/a.ts', 'not-changed.ts']), s.dir)
+  expect(result).toEqual({ discarded: 1, skipped: [] })
+  expect(read(s, 'src/a.ts')).toBe(lines(20))
+  expect(read(s, 'b.ts')).toBeNull()
+  expect(read(s, 'c.ts')).toBe('one\ntwo\nthree\n')
+  await s.app.close()
+})
+
 test('commit selected files', async () => {
   const s = await open()
   await s.page.getByRole('tab', { name: 'changes' }).click()

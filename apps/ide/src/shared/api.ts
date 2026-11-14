@@ -113,6 +113,8 @@ export interface SquadstormApi {
     numstat(root: string): Promise<Record<string, LineStats>>
     /** Throws away a file's uncommitted change (new files go to the Trash). */
     discard(root: string, change: FileChange): Promise<void>
+    /** Discards each listed path's current change, as `discard` would; conflicts are skipped. */
+    discardAll(root: string, paths: string[]): Promise<{ discarded: number; skipped: string[] }>
     /** Pushes the current branch, publishing it to origin if it has no upstream yet. */
     push(root: string): Promise<void>
   }

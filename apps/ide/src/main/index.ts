@@ -6,7 +6,7 @@ import type { AgentWorktree } from '@shared/types'
 import type { SearchQuery } from '@shared/search'
 import type { AppState } from '@shared/types'
 import { FileWatchers, listDir, readText, writeText, writeTextIfUnchanged } from './files'
-import { gitCommit, gitCommitDiff, gitCommitFiles, gitDiff, gitDiscard, gitLog, gitNumstat, gitPush, gitStatus } from './git'
+import { gitCommit, gitCommitDiff, gitCommitFiles, gitDiff, gitDiscard, gitDiscardAll, gitLog, gitNumstat, gitPush, gitStatus } from './git'
 import { cloneRepo, githubStatus, listRepos } from './github'
 import { PtyManager } from './pty'
 import { allFiles, searchWorkspace } from './search'
@@ -238,6 +238,9 @@ function registerIpc(): void {
   )
   ipcMain.handle('git:numstat', (_e, root: string) => gitNumstat(root))
   ipcMain.handle('git:discard', (_e, root: string, change: FileChange) => gitDiscard(root, change))
+  ipcMain.handle('git:discardAll', (_e, root: string, paths: string[]) =>
+    gitDiscardAll(root, Array.isArray(paths) ? paths.map(String) : [])
+  )
   ipcMain.handle('git:push', (_e, root: string) => gitPush(root))
 
   ipcMain.handle('worktrees:add', (_e, root: string, label: string, name?: string) =>

@@ -38,3 +38,4 @@ Step 2, because it deletes and restores many files. It reuses the per-file path 
 - All → `pnpm typecheck && pnpm test && pnpm test:e2e` output in the PR
 
 ## Deviations
+- 2026-11-15 — The button shows only when at least one change can be discarded (not when every change is a conflict), since it would do nothing there. `git status` in the e2e test also checks the tree is clean after Discard all.

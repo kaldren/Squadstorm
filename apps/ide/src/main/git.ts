@@ -127,8 +127,26 @@ export async function gitDiscard(root: string, requested: FileChange): Promise<v
   // current change entry may be discarded.
   const change = (await gitStatus(root)).changes.find((c) => c.path === requested?.path)
   if (!change) throw new Error(`${requested?.path} has no uncommitted changes any more.`)
-  resolveInside(root, change.path)
   if (change.kind === 'C') throw new Error(`${change.path} has a merge conflict. Resolve it first.`)
+  await discardChange(root, change)
+}
+
+/**
+ * Discards every current change whose path is in `paths` (the ones the user confirmed), one by one as
+ * `gitDiscard` would. Changes that appeared since, or that aren't listed, stay; conflicts are skipped.
+ */
+export async function gitDiscardAll(root: string, paths: string[]): Promise<{ discarded: number; skipped: string[] }> {
+  const confirmed = new Set(paths)
+  const changes = (await gitStatus(root)).changes.filter((c) => confirmed.has(c.path))
+  const skipped = changes.filter((c) => c.kind === 'C').map((c) => c.path)
+  const todo = changes.filter((c) => c.kind !== 'C')
+  for (const change of todo) await discardChange(root, change)
+  return { discarded: todo.length, skipped }
+}
+
+/** Throws away one change, given as git's current entry for it (never a conflict). */
+async function discardChange(root: string, change: FileChange): Promise<void> {
+  resolveInside(root, change.path)
   const restore = (path: string) =>
     git(root, ['--literal-pathspecs', 'restore', '--source=HEAD', '--staged', '--worktree', '--', path])
   const unstage = (path: string) => git(root, ['--literal-pathspecs', 'rm', '--cached', '--quiet', '--ignore-unmatch', '--', path])
