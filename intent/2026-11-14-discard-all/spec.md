@@ -31,8 +31,8 @@ Standards applied: AGENTS.md, apps/ide/CLAUDE.md, sdlc-loop skill.
 
 ## Flagged concerns
 - [x] **Conflicted files.** Proposed: skip them (as per-file discard already refuses them) and say so after. Alternative: revert them to HEAD too. **Resolved 2026-11-14: as proposed.**
-- [ ] **No undo.** Edits to tracked files are gone for good after confirming (new files are in the Trash). Proposed: accept, behind the confirmation, as for per-file discard. **Resolved 2026-11-14: as proposed.**
-- [ ] **All, not just checked.** Proposed: every listed change, matching the intent; the checkboxes stay for commits only. **Resolved 2026-11-14: as proposed.**
+- [x] **No undo.** Edits to tracked files are gone for good after confirming (new files are in the Trash). Proposed: accept, behind the confirmation, as for per-file discard. **Resolved 2026-11-14: as proposed.**
+- [x] **All, not just checked.** Proposed: every listed change, matching the intent; the checkboxes stay for commits only. **Resolved 2026-11-14: as proposed.**
 
 ## Risk
 Medium: it changes many files at once. Mitigations: confirmation with counts, only confirmed paths, git's current entry per file, the same tested per-file discard code path, new files go to the Trash. No migrations.
