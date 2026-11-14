@@ -1,6 +1,6 @@
-import { readFile, rm } from 'node:fs/promises'
+import { lstat, readFile, rm } from 'node:fs/promises'
 import { shell } from 'electron'
-import { LOG_FORMAT, NOT_A_REPO, parseLog, parseNameStatus, parseNumstat, parseStatus, type Commit, type FileChange, type DiffSides, type GitStatus, type LineStats } from '@shared/git'
+import { LOG_FORMAT, NOT_A_REPO, parseLog, parseNameStatus, parseNumstat, parseStatus, type Commit, type FileChange, type DiffSides, type DiscardAllResult, type DiscardRequest, type GitStatus, type LineStats } from '@shared/git'
 import { readText, resolveInside } from './files'
 import { gitEnv, run } from './github'
 import { resolveCommand } from './shell-env'
@@ -110,9 +110,11 @@ export async function gitNumstat(root: string): Promise<Record<string, LineStats
 /** Moves a file to the Trash (e2e tests record it and delete it instead). */
 async function trash(root: string, path: string): Promise<void> {
   const full = resolveInside(root, path)
+  // Already gone (a staged new file deleted since, say): nothing to keep.
+  if (!(await lstat(full).then(() => true, () => false))) return
   if (process.env.SQUADSTORM_E2E) {
     ;((globalThis as any).__squadstormTrashed ??= []).push(full)
-    await rm(full, { force: true })
+    await rm(full)
   } else {
     await shell.trashItem(full)
   }
@@ -127,15 +129,48 @@ export async function gitDiscard(root: string, requested: FileChange): Promise<v
   // current change entry may be discarded.
   const change = (await gitStatus(root)).changes.find((c) => c.path === requested?.path)
   if (!change) throw new Error(`${requested?.path} has no uncommitted changes any more.`)
-  resolveInside(root, change.path)
   if (change.kind === 'C') throw new Error(`${change.path} has a merge conflict. Resolve it first.`)
+  await discardChange(root, change)
+}
+
+/**
+ * Discards each confirmed change, one by one as `gitDiscard` would, and carries on past any that can't
+ * be. A change is touched only if git still has it with the kind the user confirmed; anything that
+ * appeared or changed kind since stays. Conflicts are skipped.
+ */
+export async function gitDiscardAll(root: string, confirmed: DiscardRequest[]): Promise<DiscardAllResult> {
+  const kinds = new Map(confirmed.map((c) => [c.path, c.kind]))
+  const result: DiscardAllResult = { discarded: 0, skipped: [] }
+  for (const change of (await gitStatus(root)).changes) {
+    if (!kinds.has(change.path)) continue
+    const skip = (reason: string) => result.skipped.push({ path: change.path, reason })
+    if (change.kind === 'C') skip('merge conflict')
+    else if (kinds.get(change.path) !== change.kind) skip('changed since you confirmed')
+    else {
+      try {
+        await discardChange(root, change)
+        result.discarded++
+      } catch (e) {
+        skip((e as Error).message.trim())
+      }
+    }
+  }
+  return result
+}
+
+/** Throws away one change, given as git's current entry for it (never a conflict). */
+async function discardChange(root: string, change: FileChange): Promise<void> {
+  resolveInside(root, change.path)
   const restore = (path: string) =>
     git(root, ['--literal-pathspecs', 'restore', '--source=HEAD', '--staged', '--worktree', '--', path])
   const unstage = (path: string) => git(root, ['--literal-pathspecs', 'rm', '--cached', '--quiet', '--ignore-unmatch', '--', path])
-  if (change.kind === 'M' || change.kind === 'D') return void (await restore(change.path))
-  if (change.kind === 'R' && change.from) {
+  // A rename (also one deleted since, which git reports as D) puts the old path back, and the new path
+  // is then a new file.
+  if (change.from) {
     resolveInside(root, change.from)
     await restore(change.from)
+  } else if (change.kind === 'M' || change.kind === 'D') {
+    return void (await restore(change.path))
   }
   await unstage(change.path)
   await trash(root, change.path)

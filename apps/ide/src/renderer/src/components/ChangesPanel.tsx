@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { commitPathspec, NOT_A_REPO, type ChangeKind, type FileChange, type GitStatus } from '@shared/git'
+import { commitPathspec, discardAllPrompt, NOT_A_REPO, type ChangeKind, type FileChange, type GitStatus } from '@shared/git'
 import { SendIcon } from './SendIcon'
 
 export const KIND_STYLE: Record<ChangeKind, { label: string; className: string }> = {
@@ -103,6 +103,18 @@ export function ChangesPanel({ root, status, loaded, statusError, refresh, selec
         : `Discard all changes to ${change.path}? They can't be recovered.`
     if (confirm(what)) void act('discard', () => window.api.git.discard(root, change))
   }
+  // Only the changes listed when the user confirmed; anything an agent writes after that stays.
+  const discardAll = () => {
+    const shown = status.changes
+    if (!confirm(discardAllPrompt(shown))) return
+    void act('discard', async () => {
+      const { skipped } = await window.api.git.discardAll(root, shown.map((c) => ({ path: c.path, kind: c.kind })))
+      if (skipped.length) {
+        const list = skipped.map((s) => `${s.path}: ${s.reason}`).join('\n')
+        throw new Error(`Left ${skipped.length === 1 ? '1 file' : `${skipped.length} files`} as they were:\n${list}`)
+      }
+    })
+  }
   // Pushing makes sense with unpushed commits, or to publish a branch that has no upstream.
   const canPush = status.remote && (status.ahead > 0 || !status.upstream) && busy === null
 
@@ -199,6 +211,17 @@ export function ChangesPanel({ root, status, loaded, statusError, refresh, selec
       </div>
 
       <div className="flex shrink-0 flex-col gap-2 border-t border-line p-2">
+        {status.changes.some((c) => c.kind !== 'C') && (
+          <button
+            className="self-start rounded px-1.5 text-xs text-muted hover:bg-raised hover:text-danger disabled:opacity-40"
+            title="Throw away every uncommitted change: edited files go back to the last commit, new files go to the Trash"
+            data-testid="discard-all"
+            disabled={busy !== null}
+            onClick={discardAll}
+          >
+            {busy === 'discard' ? 'Discarding…' : 'Discard all'}
+          </button>
+        )}
         <textarea
           className="resize-none rounded-md border border-line bg-bg px-2 py-1.5 text-[13px] outline-none placeholder:text-muted focus:border-accent/60"
           rows={2}

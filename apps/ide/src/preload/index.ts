@@ -47,6 +47,7 @@ const api: SquadstormApi = {
     commit: (root, message, paths) => ipcRenderer.invoke('git:commit', root, message, paths),
     numstat: (root) => ipcRenderer.invoke('git:numstat', root),
     discard: (root, change) => ipcRenderer.invoke('git:discard', root, change),
+    discardAll: (root, confirmed) => ipcRenderer.invoke('git:discardAll', root, confirmed),
     push: (root) => ipcRenderer.invoke('git:push', root)
   },
   worktrees: {
