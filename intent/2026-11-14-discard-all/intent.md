@@ -1,6 +1,6 @@
 # Intent: Revert all changes at once
 
-Author: Kaloyan (owner). Status: draft.
+Author: Kaloyan (owner). Status: Accepted.
 Origin: idea (2026-11-14). Issue: none.
 
 ## Problem

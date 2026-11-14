@@ -1,6 +1,6 @@
 # Plan: Revert all changes at once
 
-From: intent.md + spec.md in intent/2026-11-14-discard-all/. Status: draft.
+From: intent.md + spec.md in intent/2026-11-14-discard-all/. Status: accepted.
 Written without changing any code.
 
 ## Files that change
