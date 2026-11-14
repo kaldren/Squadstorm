@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { commitPathspec, parseLog, parseNameStatus, parseNumstat, parseStatus } from '../src/shared/git'
+import { commitPathspec, discardAllPrompt, parseLog, parseNameStatus, parseNumstat, parseStatus } from '../src/shared/git'
 
 const z = (...records: string[]) => records.join('\0') + '\0'
 
@@ -87,3 +87,39 @@ describe('commitPathspec', () => {
   })
 })
 
+
+describe('discardAllPrompt', () => {
+  it('counts what goes back to the last commit and what goes to the Trash', () => {
+    expect(
+      discardAllPrompt([
+        { path: 'a.ts', kind: 'M' },
+        { path: 'b.ts', kind: 'D' },
+        { path: 'to.ts', kind: 'R', from: 'from.ts' },
+        { path: 'c.ts', kind: 'A' },
+        { path: 'd.ts', kind: 'A' }
+      ])
+    ).toBe("Discard all 5 changes? 3 edited files go back to the last commit and can't be recovered. 2 new files go to the Trash.")
+  })
+
+  it('uses the singular and leaves out parts that are empty', () => {
+    expect(discardAllPrompt([{ path: 'a.ts', kind: 'M' }])).toBe(
+      "Discard all 1 change? 1 edited file goes back to the last commit and can't be recovered."
+    )
+    expect(discardAllPrompt([{ path: 'c.ts', kind: 'A' }])).toBe('Discard all 1 change? 1 new file goes to the Trash.')
+  })
+
+  it("says conflicted files are left alone", () => {
+    expect(discardAllPrompt([{ path: "a.ts", kind: "A" }, { path: "x.ts", kind: "C" }])).toBe(
+      "Discard all 1 change? 1 new file goes to the Trash. 1 file with a merge conflict stays as it is."
+    )
+    expect(
+      discardAllPrompt([
+        { path: 'a.ts', kind: 'M' },
+        { path: 'x.ts', kind: 'C' },
+        { path: 'y.ts', kind: 'C' }
+      ])
+    ).toBe(
+      "Discard all 1 change? 1 edited file goes back to the last commit and can't be recovered. 2 files with merge conflicts stay as they are."
+    )
+  })
+})
