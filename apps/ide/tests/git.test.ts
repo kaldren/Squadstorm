@@ -108,9 +108,9 @@ describe('discardAllPrompt', () => {
     expect(discardAllPrompt([{ path: 'c.ts', kind: 'A' }])).toBe('Discard all 1 change? 1 new file goes to the Trash.')
   })
 
-  it("says conflicted files are left alone", () => {
-    expect(discardAllPrompt([{ path: "a.ts", kind: "A" }, { path: "x.ts", kind: "C" }])).toBe(
-      "Discard all 1 change? 1 new file goes to the Trash. 1 file with a merge conflict stays as it is."
+  it('says conflicted files are left alone', () => {
+    expect(discardAllPrompt([{ path: 'a.ts', kind: 'A' }, { path: 'x.ts', kind: 'C' }])).toBe(
+      'Discard all 1 change? 1 new file goes to the Trash. 1 file with a merge conflict stays as it is.'
     )
     expect(
       discardAllPrompt([
